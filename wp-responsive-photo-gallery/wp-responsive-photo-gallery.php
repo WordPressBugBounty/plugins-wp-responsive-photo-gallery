@@ -5,7 +5,7 @@
     Author URI:https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/
     Description: This is beautiful masonry tiled gallery and photo gallery slideshow plugin for wordPress blogs and sites.Admin can manages any number of images for photo slideshow and unlimited media into the masonry gallery.
     Author:I Thirteen Web Solution
-    Version:1.0.15
+    Version:1.0.16
     Text Domain:wp-responsive-photo-gallery
     Domain Path: /languages
     */
@@ -3040,24 +3040,28 @@ function rjg_get_youtube_info_justified_gallery_callback(){
         
                 $vid=sanitize_text_field($_POST['vid']);
                 $url=$_POST['url']; 
-            	
-                $output=  wp_remote_retrieve_body( wp_remote_get( $url ) ); 
+               
+                $result = parse_url($url);
+            	if($result['host']=='www.youtube.com' || $result['host']=='youtube.com' || $result['host']=='m.youtube.com'){ 
+                    
+                            $output=  wp_remote_retrieve_body( wp_remote_get( $url ) ); 
 
-                $output=json_decode($output);
-                
+                            $output=json_decode($output);
 
- 
-                $return=array();
-                if(is_object($output)){
-                   
-                 $return['title']=sanitize_text_field($output->title);
-                 $return['thumbnail_url']=sanitize_text_field($output->thumbnail_url);
-                 
-                 
-               }
-                
-          echo json_encode($return);
-          exit;
+
+
+                            $return=array();
+                            if(is_object($output)){
+
+                             $return['title']=sanitize_text_field($output->title);
+                             $return['thumbnail_url']=sanitize_text_field($output->thumbnail_url);
+
+
+                           }
+
+                      echo json_encode($return);
+                      exit;
+                }
         
     }
     
@@ -3079,10 +3083,16 @@ function rjg_check_file_exist_justified_gallery_callback() {
                     wp_die('Security check fail');
                 }
                 
-                $response = wp_remote_get(sanitize_text_field($_POST['url']));
-                $httpCode = wp_remote_retrieve_response_code( $response );
-		
-		echo trim((string)$httpCode);die;
+                  $result = parse_url($url);
+	       
+	        if(isset($result['host']) && 'img.youtube.com'==$result['host']){
+    
+                        $response = wp_remote_get(sanitize_text_field($_POST['url']));
+                        $httpCode = wp_remote_retrieve_response_code( $response );
+
+                        echo trim((string)$httpCode);die;
+                        
+                }
 		
 	}
 	
