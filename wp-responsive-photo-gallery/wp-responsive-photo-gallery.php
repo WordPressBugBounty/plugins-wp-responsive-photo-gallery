@@ -5,7 +5,7 @@
     Author URI:https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/
     Description: This is beautiful masonry tiled gallery and photo gallery slideshow plugin for wordPress blogs and sites.Admin can manages any number of images for photo slideshow and unlimited media into the masonry gallery.
     Author:I Thirteen Web Solution
-    Version:1.0.16
+    Version:1.0.17
     Text Domain:wp-responsive-photo-gallery
     Domain Path: /languages
     */
@@ -337,7 +337,7 @@
             wp_register_style ( 'rjg-lbox', plugins_url ( '/css/rjg-lbox.css', __FILE__ ) ,array(),'1.0.11');
             wp_register_style ( 'rjg-justified-gallery', plugins_url ( '/css/rjg-justified-gallery.css', __FILE__ ) );
             wp_register_script ( 'rjg-justified-gallery', plugins_url ( '/js/rjg-justified-gallery.js', __FILE__ ),array('jquery'),'1.0.8' );
-            wp_register_script ( 'rjg-lbox-js', plugins_url ( '/js/rjg-lbox-js.js', __FILE__ ),array('jquery'),'1.0.11' );
+            wp_register_script ( 'rjg-lbox-js', plugins_url ( '/js/rjg-lbox-js.js', __FILE__ ),array('jquery'),'1.0.17' );
 
           
         }
@@ -1444,6 +1444,7 @@
                                                 validExtensions[1]='jpeg';
                                                 validExtensions[2]='png';
                                                 validExtensions[3]='gif';
+                                                validExtensions[4]='webp';
 
 
                                                 var inarr=parseInt(jQuery.inArray( attachment.subtype, validExtensions));
@@ -1866,6 +1867,7 @@
                                                                             validExtensions[1]='jpeg';
                                                                             validExtensions[2]='png';
                                                                             validExtensions[3]='gif';
+                                                                            validExtensions[4]='webp';
 
 
                                                                             var inarr=parseInt(jQuery.inArray( attachment.subtype, validExtensions));
@@ -3860,6 +3862,7 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                                                 validExtensions[1]='jpeg';
                                                 validExtensions[2]='png';
                                                 validExtensions[3]='gif';
+                                                validExtensions[4]='webp';
 
 
                                                 var inarr=parseInt(jQuery.inArray( attachment.subtype, validExtensions));
@@ -5069,6 +5072,7 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                                                                                         validExtensions[1] = 'jpeg';
                                                                                         validExtensions[2] = 'png';
                                                                                         validExtensions[3] = 'gif';
+                                                                                        validExtensions[4] = 'webp';
                                                                                        
                                                                                         var inarr = parseInt(jQuery.inArray(attachment.subtype, validExtensions));
                                                                                           if (inarr > 0 && attachment.type.toLowerCase() == 'image'){
@@ -5295,6 +5299,7 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                                                                                         validExtensions[1] = 'jpeg';
                                                                                         validExtensions[2] = 'png';
                                                                                         validExtensions[3] = 'gif';
+                                                                                        validExtensions[4] = 'webp';
                                                                                        
                                                                                         var inarr = parseInt(jQuery.inArray(attachment.subtype, validExtensions));
                                                                                           if (inarr > 0 && attachment.type.toLowerCase() == 'image'){
@@ -5517,6 +5522,7 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                                                                                         validExtensions[1] = 'jpeg';
                                                                                         validExtensions[2] = 'png';
                                                                                         validExtensions[3] = 'gif';
+                                                                                        validExtensions[4] = 'webp';
                                                                                        
                                                                                         var inarr = parseInt(jQuery.inArray(attachment.subtype, validExtensions));
                                                                                           if (inarr > 0 && attachment.type.toLowerCase() == 'image'){

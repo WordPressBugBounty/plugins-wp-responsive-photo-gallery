@@ -3,9 +3,9 @@ Contributors:nik00726
 Donate link: http://www.i13websolution.com/donate-wordpress_image_thumbnail.php
 Tags:wordpress responsive photo gallery,wordpress responsive gallery,wordpress responsive photo slideshow,wp responsive photo slideshow,Masonry Gallery,wordpress responsive photo album slideshow, Tiled Gallery
 Requires at least:3.5
-Tested up to:6.7
-Version:1.0.16
-Stable tag:1.0.16
+Tested up to:6.8
+Version:1.0.17
+Stable tag:1.0.17
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -184,6 +184,11 @@ This plugin is free for everyone! Since it's released under the GPL, you can use
 
 
 == Changelog ==
+
+= 1.0.17 =
+
+* Added support for webp images
+* Tested with WordPress 6.8
 
 
 = 1.0.16 =

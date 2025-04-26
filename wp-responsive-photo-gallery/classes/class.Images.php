@@ -54,6 +54,9 @@
                     case '.png': 
                         $img = @imagecreatefrompng($file); 
                         break; 
+                    case '.webp': 
+                        $img = @imagecreatefromwebp($file); 
+                        break; 
                     default: 
                         $img = false; 
                         break; 
@@ -233,6 +236,17 @@
 
                         if (imagetypes() & IMG_PNG) { 
                              imagepng($this->imageResized, $savePath, $invertScaleQuality); 
+                        } 
+                        break; 
+                    case '.webp': 
+                        // *** Scale quality from 0-100 to 0-9 
+                        $scaleQuality = round(($imageQuality/100) * 9); 
+
+                        // *** Invert quality setting as 0 is best, not 9 
+                        $invertScaleQuality = 9 - $scaleQuality; 
+
+                        if (imagetypes() & IMG_WEBP) { 
+                             imagewebp($this->imageResized, $savePath); 
                         } 
                         break; 
 
