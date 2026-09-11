@@ -1,0 +1,203 @@
+/* Masonry Tiled Gallery - Modern Engine (dependency-free) */
+.rjg-mgrid-app {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.rjg-mgrid-app *, .rjg-mgrid-app *::before, .rjg-mgrid-app *::after {
+    box-sizing: border-box;
+}
+
+.rjg-mgrid {
+    position: relative;
+    width: 100%;
+    /* height is set via JS to the tallest column's total height */
+}
+
+/* Each item is absolutely positioned by JS using a shortest-column-first
+   ("true" masonry) placement algorithm, rather than relying on the browser's
+   own CSS Grid auto-placement — which places items into the first available
+   slot and can leave a visibly short column with a gap at the bottom when
+   item heights don't divide evenly. */
+.rjg-mgrid-item-wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+}
+
+/* Few-items mode: neat single row instead of ragged masonry */
+.rjg-mgrid.rjg-mgrid-row-mode {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: var(--rjg-gap, 8px);
+    height: auto !important;
+}
+.rjg-mgrid.rjg-mgrid-row-mode .rjg-mgrid-item-wrap {
+    position: static;
+    flex: 1 1 var(--rjg-col-width, 220px);
+    margin-bottom: 0;
+    height: var(--rjg-col-width, 220px);
+    width: auto;
+}
+.rjg-mgrid.rjg-mgrid-row-mode .rjg-mgrid-item,
+.rjg-mgrid.rjg-mgrid-row-mode .rjg-mgrid-imgbox { height: 100%; }
+.rjg-mgrid.rjg-mgrid-row-mode .rjg-mgrid-imgbox img { height: 100%; object-fit: cover; }
+
+.rjg-mgrid-item-wrap {
+    overflow: hidden;
+}
+
+.rjg-mgrid-item {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    background: #f0f0f3;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.rjg-mgrid-imgbox {
+    display: block;
+    position: relative;
+    line-height: 0;
+    overflow: hidden;
+}
+.rjg-mgrid-imgbox img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 0;
+    margin: 0;
+    transition: transform .4s ease;
+}
+.rjg-mgrid-item:hover .rjg-mgrid-imgbox img { transform: scale(1.06); }
+
+.rjg-mgrid-imgbox::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    transition: background .3s ease;
+    pointer-events: none;
+}
+.rjg-mgrid-item:hover .rjg-mgrid-imgbox::after { background: rgba(0,0,0,.2); }
+
+.rjg-mgrid-playicon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 50px;
+    height: 50px;
+    margin: -25px 0 0 -25px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.55);
+    z-index: 2;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity .25s ease, transform .25s ease, background .25s ease;
+    pointer-events: none;
+}
+.rjg-mgrid-item:hover .rjg-mgrid-playicon { opacity: 1; transform: scale(1); background: rgba(0,0,0,.7); }
+.rjg-mgrid-playicon::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 54%;
+    transform: translate(-50%, -50%);
+    border-style: solid;
+    border-width: 10px 0 10px 16px;
+    border-color: transparent transparent transparent #fff;
+}
+
+.rjg-mgrid-zoomicon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.55);
+    z-index: 2;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity .25s ease, transform .25s ease, background .25s ease;
+    pointer-events: none;
+}
+.rjg-mgrid-item:hover .rjg-mgrid-zoomicon { opacity: 1; transform: scale(1); background: rgba(0,0,0,.7); }
+.rjg-mgrid-zoomicon::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: 13px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+}
+.rjg-mgrid-zoomicon::after {
+    content: "";
+    position: absolute;
+    top: 26px;
+    left: 26px;
+    width: 9px;
+    height: 2px;
+    background: #fff;
+    transform: rotate(45deg);
+    transform-origin: 0 0;
+}
+
+.rjg-mgrid-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    padding: 10px 10px 8px;
+    font-size: 13px;
+    color: #fff;
+    background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform .3s ease, opacity .3s ease;
+}
+.rjg-mgrid-item:hover .rjg-mgrid-caption { transform: translateY(0); opacity: 1; }
+@media (hover: none) {
+    .rjg-mgrid-caption { transform: translateY(0); opacity: 1; }
+}
+
+.rjg-mgrid-app .rjg-mgrid { visibility: hidden; }
+.rjg-mgrid-app.rjg-mgrid-ready .rjg-mgrid { visibility: visible; }
+
+/* Pagination - reuses WP's own paginate_links() markup (ul.page-numbers) */
+.rjg-mgrid-pagination.page-numbers,
+.rjg-mgrid-pagination ul.page-numbers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 0;
+}
+.rjg-mgrid-pagination .page-numbers li { list-style: none; }
+.rjg-mgrid-pagination .page-numbers a,
+.rjg-mgrid-pagination .page-numbers span {
+    display: inline-block;
+    min-width: 34px;
+    text-align: center;
+    padding: 6px 10px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    color: #444;
+    text-decoration: none;
+    font-size: 13px;
+}
+.rjg-mgrid-pagination .page-numbers a:hover { border-color: #999; background: #f7f7f7; }
+.rjg-mgrid-pagination .page-numbers span.current {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}

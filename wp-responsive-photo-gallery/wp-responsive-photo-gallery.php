@@ -5,13 +5,17 @@
     Author URI:https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/
     Description: This is beautiful masonry tiled gallery and photo gallery slideshow plugin for wordPress blogs and sites.Admin can manages any number of images for photo slideshow and unlimited media into the masonry gallery.
     Author:I Thirteen Web Solution
-    Version:1.0.17
+    Version:1.0.43
     Text Domain:wp-responsive-photo-gallery
     Domain Path: /languages
     */
     //error_reporting(0);
 
      if ( ! defined( 'ABSPATH' ) ) exit; 
+
+     if (!defined('WPRPG_PL_VERSION')) {
+         define('WPRPG_PL_VERSION', '1.0.43');
+     }
     
     $dir = plugin_dir_path( __FILE__ );
     $dir=str_replace("\\","/",$dir);
@@ -19,6 +23,8 @@
 
         require_once($dir.'classes/class.Images.php');
     } 
+
+    require_once($dir.'blocks/block-loader.php');
 
     add_action('admin_menu', 'add_my_responsive_photo_gallery_admin_menu');
     //add_action( 'admin_init', 'my_responsive_photo_gallery_admin_init' );
@@ -29,6 +35,27 @@
     add_filter('widget_text', 'do_shortcode');
     add_action ( 'admin_notices', 'wp_responsive_photo_gallery_admin_notices' );
     add_action('plugins_loaded', 'rsp_responsive_photo_gallery_load_lang');
+    add_action('plugins_loaded', 'wprpg_maybe_upgrade_db');
+
+    /**
+     * install_my_responsive_photo_gallery() (table creation via dbDelta) was
+     * previously only ever run from register_activation_hook — which fires
+     * on activation, but NOT when an existing install's plugin files are
+     * simply updated in place (the normal way most users update a plugin,
+     * without deactivating first). dbDelta() is designed to be safely
+     * re-run and will apply any schema changes automatically, so re-running
+     * it here — gated on a stored version option so it only actually runs
+     * once per real upgrade, not on every page load — keeps existing sites'
+     * tables in sync with whatever this version of the plugin expects.
+     */
+    function wprpg_maybe_upgrade_db() {
+        $installed_version = get_option( 'wprpg_db_version' );
+        if ( $installed_version === WPRPG_PL_VERSION ) {
+            return;
+        }
+        install_my_responsive_photo_gallery();
+        update_option( 'wprpg_db_version', WPRPG_PL_VERSION );
+    }
     
     add_action( 'wp_ajax_rjg_check_file_exist_justified_gallery', 'rjg_check_file_exist_justified_gallery_callback' );
     add_action( 'wp_ajax_rjg_get_youtube_info_justified_gallery', 'rjg_get_youtube_info_justified_gallery_callback' );
@@ -339,6 +366,14 @@
             wp_register_script ( 'rjg-justified-gallery', plugins_url ( '/js/rjg-justified-gallery.js', __FILE__ ),array('jquery'),'1.0.8' );
             wp_register_script ( 'rjg-lbox-js', plugins_url ( '/js/rjg-lbox-js.js', __FILE__ ),array('jquery'),'1.0.17' );
 
+            wp_register_style ( 'rjg-modern-slider', plugins_url ( '/css/rjg-modern-slider.css', __FILE__ ), array(), WPRPG_PL_VERSION );
+            wp_register_script ( 'rjg-modern-slider', plugins_url ( '/js/rjg-modern-slider.js', __FILE__ ), array(), WPRPG_PL_VERSION, true );
+
+            wp_register_style ( 'rjg-modern-masonry', plugins_url ( '/css/rjg-modern-masonry.css', __FILE__ ), array(), WPRPG_PL_VERSION );
+            wp_register_script ( 'rjg-modern-masonry', plugins_url ( '/js/rjg-modern-masonry.js', __FILE__ ), array(), WPRPG_PL_VERSION, true );
+            wp_register_style ( 'rjg-modern-lightbox', plugins_url ( '/css/rjg-modern-lightbox.css', __FILE__ ), array(), WPRPG_PL_VERSION );
+            wp_register_script ( 'rjg-modern-lightbox', plugins_url ( '/js/rjg-modern-lightbox.js', __FILE__ ), array(), WPRPG_PL_VERSION, true );
+
           
         }
 
@@ -406,7 +441,8 @@
             'frame_gap'=>1,
             'show_captions'=>0,
             'show_infobar'=>0,
-            'infobar_opacity'=>1
+            'infobar_opacity'=>1,
+            'slider_engine'=>'modern'
         );
 
         if( !get_option( 'my_responsive_photo_gallery_slider_settings' ) ) {
@@ -421,7 +457,8 @@
             'imageMargin'=>5,
              'page_size'=>50,
              'show_hover_caption'=>1,   
-             'show_hover_icon'=>1
+             'show_hover_icon'=>1,
+             'masonry_engine'=>'modern'
 
         );
 
@@ -477,7 +514,8 @@
             'imageMargin'=>5,
              'page_size'=>50,
              'show_hover_caption'=>1,   
-             'show_hover_icon'=>1
+             'show_hover_icon'=>1,
+             'masonry_engine'=>'modern'
 
         );
 
@@ -486,6 +524,17 @@
              update_option('rjg_settings',$rjg_settings);
          } 
         
+        $my_responsive_photo_gallery_slider_settings = get_option('my_responsive_photo_gallery_slider_settings');
+        if(is_array($my_responsive_photo_gallery_slider_settings) and !isset($my_responsive_photo_gallery_slider_settings['slider_engine'])){
+            $my_responsive_photo_gallery_slider_settings['slider_engine'] = 'legacy';
+            update_option('my_responsive_photo_gallery_slider_settings', $my_responsive_photo_gallery_slider_settings);
+        }
+
+        $rjg_settings_existing = get_option('rjg_settings');
+        if(is_array($rjg_settings_existing) and !isset($rjg_settings_existing['masonry_engine'])){
+            $rjg_settings_existing['masonry_engine'] = 'legacy';
+            update_option('rjg_settings', $rjg_settings_existing);
+        }
         
     }
 
@@ -518,12 +567,50 @@
         }
         
     }
-    
+
+    /**
+     * Shared Pro upgrade card shown on plugin admin pages in place of the old
+     * affiliate/donate banners. Lists real Pro features only.
+     */
+    function wprpg_admin_pro_upgrade_card(){
+        ?>
+        <div style="max-width:640px;margin:15px 0;padding:16px 20px;background:#fff;border:1px solid #dcdcde;border-left:4px solid #2271b1;border-radius:4px;">
+            <h3 style="margin:0 0 8px;font-size:15px;"><?php echo __( 'Get More With Photo Gallery Slideshow & Masonry Tiled Gallery Pro','wp-responsive-photo-gallery' ); ?></h3>
+            <ul style="margin:0 0 12px 18px;list-style:disc;font-size:13px;line-height:1.6;">
+                <li><?php echo __( 'Unlimited Photo Galleries and Masonry Galleries','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'Video support in Masonry Gallery: YouTube, Vimeo, HTML5 &amp; more','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'Mass image upload using the WordPress Media Library','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'No advertisements, plus priority support','wp-responsive-photo-gallery' ); ?></li>
+            </ul>
+            <a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/" style="display:inline-block;padding:6px 16px;background:#2271b1;color:#fff;text-decoration:none;border-radius:3px;font-size:13px;font-weight:600;"><?php echo __( 'Upgrade to Pro','wp-responsive-photo-gallery' ); ?></a>
+        </div>
+        <?php
+    }
+
+    /**
+     * Same Pro upgrade card, floated to the right for pages (previews) that
+     * don't use the #postbox-container-1 / columns-2 admin layout.
+     */
+    function wprpg_admin_pro_upgrade_card_float(){
+        ?>
+        <div style="float:right;width:300px;margin:0 0 20px 20px;padding:14px 18px;background:#fff;border:1px solid #dcdcde;border-left:4px solid #2271b1;border-radius:4px;">
+            <h3 style="margin:0 0 8px;font-size:14px;"><?php echo __( 'Get More With Photo Gallery Slideshow & Masonry Tiled Gallery Pro','wp-responsive-photo-gallery' ); ?></h3>
+            <ul style="margin:0 0 12px 16px;list-style:disc;font-size:12px;line-height:1.6;">
+                <li><?php echo __( 'Unlimited Photo Galleries and Masonry Galleries','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'Video support in Masonry Gallery: YouTube, Vimeo, HTML5 &amp; more','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'Mass image upload using the WordPress Media Library','wp-responsive-photo-gallery' ); ?></li>
+                <li><?php echo __( 'No advertisements, plus priority support','wp-responsive-photo-gallery' ); ?></li>
+            </ul>
+            <a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/" style="display:inline-block;padding:5px 14px;background:#2271b1;color:#fff;text-decoration:none;border-radius:3px;font-size:12px;font-weight:600;"><?php echo __( 'Upgrade to Pro','wp-responsive-photo-gallery' ); ?></a>
+        </div>
+        <?php
+    }
+
     function add_my_responsive_photo_gallery_admin_menu(){
 
 
 
-        $hook_suffix_r_p=add_menu_page( __( 'Photo Slideshow & Masonry Gallery','wp-responsive-photo-gallery'), __( 'Photo Slideshow & Masonry Gallery','wp-responsive-photo-gallery' ), 'rsp_responsive_photo_gallery_slideshow_settings', 'responsive_photo_gallery_slider', 'responsive_photo_gallery_slider_admin_options' );
+        $hook_suffix_r_p=add_menu_page( __( 'Photo Slideshow & Masonry Gallery','wp-responsive-photo-gallery'), __( 'Photo Slideshow & Masonry Gallery','wp-responsive-photo-gallery' ), 'rsp_responsive_photo_gallery_slideshow_settings', 'responsive_photo_gallery_slider', 'responsive_photo_gallery_slider_admin_options', 'dashicons-format-gallery' );
         $hook_suffix_r_p=add_submenu_page( 'responsive_photo_gallery_slider', __( 'Slideshow Settings','wp-responsive-photo-gallery'), __( 'Slideshow Settings','wp-responsive-photo-gallery' ),'rsp_responsive_photo_gallery_slideshow_settings', 'responsive_photo_gallery_slider', 'responsive_photo_gallery_slider_admin_options' );
         $hook_suffix_r_p_1=add_submenu_page( 'responsive_photo_gallery_slider', __( 'Slideshow Images','wp-responsive-photo-gallery'), __( 'Slideshow Images','wp-responsive-photo-gallery'),'rsp_responsive_photo_gallery_view_images', 'responsive_photo_gallery_image_management', 'responsive_photo_gallery_image_management' );
         $hook_suffix_r_p_2=add_submenu_page( 'responsive_photo_gallery_slider', __( 'Slideshow Preview','wp-responsive-photo-gallery'), __( 'Slideshow Preview','wp-responsive-photo-gallery'),'rsp_responsive_photo_gallery_preview', 'responsive_photo_galleryrsp_responsive_photo_gallery_preview_slider_preview', 'responsive_photo_gallery_slider_admin_preview' );
@@ -557,6 +644,9 @@
         wp_enqueue_style( 'jquery.galleryview-3.0-dev-responsive', plugins_url('/css/jquery.galleryview-3.0-dev-responsive.css', __FILE__) );
         wp_enqueue_style ( 'rjg-lbox', plugins_url ( '/css/rjg-lbox.css', __FILE__ ) );
         wp_enqueue_style ( 'rjg-justified-gallery', plugins_url ( '/css/rjg-justified-gallery.css', __FILE__ ) );
+        wp_enqueue_style ( 'rjg-modern-slider', plugins_url ( '/css/rjg-modern-slider.css', __FILE__ ) );
+        wp_enqueue_style ( 'rjg-modern-masonry', plugins_url ( '/css/rjg-modern-masonry.css', __FILE__ ) );
+        wp_enqueue_style ( 'rjg-modern-lightbox', plugins_url ( '/css/rjg-modern-lightbox.css', __FILE__ ) );
         
         wp_enqueue_script('jquery'); 
         wp_enqueue_script("jquery-ui-core");
@@ -566,6 +656,9 @@
         wp_enqueue_script('jquery.validate',plugins_url('/js/jquery.validate.js', __FILE__));
         wp_enqueue_script ( 'rjg-justified-gallery', plugins_url ( '/js/rjg-justified-gallery.js', __FILE__ ) );
         wp_enqueue_script ( 'rjg-lbox-js', plugins_url ( '/js/rjg-lbox-js.js', __FILE__ ) );
+        wp_enqueue_script ( 'rjg-modern-slider', plugins_url ( '/js/rjg-modern-slider.js', __FILE__ ), array(), false, true );
+        wp_enqueue_script ( 'rjg-modern-masonry', plugins_url ( '/js/rjg-modern-masonry.js', __FILE__ ), array(), false, true );
+        wp_enqueue_script ( 'rjg-modern-lightbox', plugins_url ( '/js/rjg-modern-lightbox.js', __FILE__ ), array(), false, true );
      
           
         rjg_responsive_justified_gallery_plus_lightbox_admin_scripts_init();
@@ -618,7 +711,7 @@
             $options['overlay_position']       ='bottom';
             $options['filmstrip_position']     ='bottom';
             $options['enable_overlays']        =0;
-            $options['show_captions']          =0;
+            $options['show_captions']          =(isset($_POST['show_captions']) and (int)$_POST['show_captions']==1)?1:0;
             $options['show_filmstrip_nav']     =0;
             $options['show_panels']            =1;
 
@@ -626,6 +719,8 @@
                 $options['enable_slideshow']=1;
             else   
                 $options['enable_slideshow']=0;
+
+            $options['slider_engine']=(isset($_POST['slider_engine']) and $_POST['slider_engine']=='legacy')?'legacy':'modern';
 
             $settings=update_option('my_responsive_photo_gallery_slider_settings',$options); 
             $my_responsive_photo_gallery_slider_settings_messages=array();
@@ -642,28 +737,6 @@
     <div style="width: 100%;">  
         <div style="float:left;width:100%;">
             <div class="wrap">
-                <table><tr>
-                        <td>
-                          <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                          <div id="fb-root"></div>
-                            <script>(function(d, s, id) {
-                              var js, fjs = d.getElementsByTagName(s)[0];
-                              if (d.getElementById(id)) return;
-                              js = d.createElement(s); js.id = id;
-                              js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                              fjs.parentNode.insertBefore(js, fjs);
-                            }(document, 'script', 'facebook-jssdk'));</script>
-                      </td>
-                        <td>
-                            <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                            </a>
-                        </td>
-                    </tr>
-                </table>
-                <div style="clear:both">
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                </div>     
                 <?php
                     $messages=get_option('my_responsive_photo_gallery_slider_settings_messages'); 
                     $type='';
@@ -696,6 +769,20 @@
                                         <tbody>
                                             <tr>
                                                 <td class="label">
+                                                    <label for="slider_engine"><?php echo __( 'Slider Engine','wp-responsive-photo-gallery' );?></label>
+                                                </td>
+                                                <td class="value">
+                                                    <select id="slider_engine" name="slider_engine" class="select">
+                                                        <option <?php if(!isset($settings['slider_engine']) or $settings['slider_engine']=='modern'):?> selected="selected" <?php endif;?> value="modern"><?php echo __( 'Modern (recommended)','wp-responsive-photo-gallery' );?></option>
+                                                        <option <?php if(isset($settings['slider_engine']) and $settings['slider_engine']=='legacy'):?> selected="selected" <?php endif;?> value="legacy"><?php echo __( 'Legacy','wp-responsive-photo-gallery' );?></option>
+                                                    </select>
+                                                    <p class="description"><?php echo __( 'Modern uses a lightweight, dependency-free slider engine. Legacy keeps the original jQuery-based slider.','wp-responsive-photo-gallery' );?></p>
+                                                    <div style="clear:both"></div>
+                                                    <div></div>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="label">
                                                     <label for="transition_speed"><?php echo __( 'Transition Speed','wp-responsive-photo-gallery' );?> <span class="required">*</span></label>
                                                 </td>
                                                 <td class="value">
@@ -724,6 +811,20 @@
                                                         <option <?php if($settings['show_panel_nav']==1):?> selected="selected" <?php endif;?>  value="1" ><?php echo __( 'Yes','wp-responsive-photo-gallery' );?></option>
                                                         <option <?php if($settings['show_panel_nav']==0):?> selected="selected" <?php endif;?>  value="0"><?php echo __( 'No','wp-responsive-photo-gallery' );?></option>
                                                     </select>            
+                                                    <div style="clear:both"></div>
+                                                    <div></div>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="label">
+                                                    <label for="show_captions"><?php echo __( 'Show Captions','wp-responsive-photo-gallery' );?></label>
+                                                </td>
+                                                <td class="value">
+                                                    <select id="show_captions" name="show_captions" class="select">
+                                                        <option <?php if(isset($settings['show_captions']) and $settings['show_captions']==1):?> selected="selected" <?php endif;?>  value="1" ><?php echo __( 'Yes','wp-responsive-photo-gallery' );?></option>
+                                                        <option <?php if(!isset($settings['show_captions']) or $settings['show_captions']==0):?> selected="selected" <?php endif;?>  value="0"><?php echo __( 'No','wp-responsive-photo-gallery' );?></option>
+                                                    </select>
+                                                    <p class="description"><?php echo __( 'Shows the image title as a caption on the slide.','wp-responsive-photo-gallery' );?></p>
                                                     <div style="clear:both"></div>
                                                     <div></div>
                                                 </td>
@@ -912,7 +1013,6 @@
                                 <input type="hidden" name="overlay_position" id="overlay_position" value="bottom"> 
                                 <input type="hidden" name="filmstrip_position" id="filmstrip_position" value="bottom"> 
                                 <input type="hidden" name="enable_overlays" id="enable_overlays" value="0"> 
-                                <input type="hidden" name="show_captions" id="show_captions" value="0"> 
                                 <input type="hidden" name="show_filmstrip_nav" id="show_filmstrip_nav" value="0"> 
                                 <input type="hidden" name="show_panels" id="show_panels" value="1"> 
                             </form> 
@@ -1003,28 +1103,9 @@
                             </script> 
 
                         </div>
-                        <div id="postbox-container-1" class="postbox-container"  > 
-
-                            <div class="postbox"> 
-                                <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery' );?></h3> 
-                                <div class="inside">
-                                    <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-
-                                    <div style="margin:10px 5px">
-
-                                    </div>
-                                </div></div>
-                            <div class="postbox"> 
-                            <center><h3 class="hndle"><span></span><?php echo __( 'Google For Business','wp-responsive-photo-gallery');?></h3> </center>
-                            <div class="inside">
-                                <center><a target="_blank" href="https://goo.gl/OJBuHT"><img style="max-width:350px;width:100%" src="<?php echo plugins_url( 'images/gsuite_promo.png', __FILE__ ) ;?>"  border="0"></a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div></div>
-                            
-                             
-
-                        </div>      
+                        <div id="postbox-container-1" class="postbox-container">
+                            <?php wprpg_admin_pro_upgrade_card(); ?>
+                        </div>
                        <div class="clear"></div>
                     </div>                                              
 
@@ -1104,28 +1185,6 @@
 
         ?> 
        <div class="wrap">
-           <table><tr>
-                     <td>
-                          <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                          <div id="fb-root"></div>
-                            <script>(function(d, s, id) {
-                              var js, fjs = d.getElementsByTagName(s)[0];
-                              if (d.getElementById(id)) return;
-                              js = d.createElement(s); js.id = id;
-                              js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                              fjs.parentNode.insertBefore(js, fjs);
-                            }(document, 'script', 'facebook-jssdk'));</script>
-                      </td>
-                        <td>
-                            <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                            </a>
-                        </td>
-                    </tr>
-                </table>
-                <div style="clear:both">
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                </div>      
 
             <?php 
 
@@ -1525,26 +1584,8 @@
 
                         <div class="clear"></div>
                     </div>
-                    <div id="postbox-container-1" class="postbox-container"  > 
-
-                        <div class="postbox"> 
-                            <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery');?></h3> 
-                            <div class="inside">
-                                <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-
-                                <div style="margin:10px 5px">
-
-                                </div>
-                            </div></div>
-                        <div class="postbox"> 
-                            <center><h3 class="hndle"><span></span><?php echo __( 'Google For Business','wp-responsive-photo-gallery');?></h3> </center>
-                            <div class="inside">
-                                <center><a target="_blank" href="https://goo.gl/OJBuHT"><img style="width:100%" src="<?php echo plugins_url( 'images/gsuite_promo.png', __FILE__ ) ;?>" border="0"></a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div></div>
-                        
-
+                    <div id="postbox-container-1" class="postbox-container">
+                        <?php wprpg_admin_pro_upgrade_card(); ?>
                     </div>
                     <div class="clear"></div>
                 </div> 
@@ -1805,9 +1846,6 @@
 
                             }
                         ?>
-                        <div style="clear:both">
-                            <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                        </div>   
                         <h2><?php echo __( 'Add Image','wp-responsive-photo-gallery' );?></h2>
                         <?php } ?>
 
@@ -2014,20 +2052,9 @@
                                 </script> 
 
                             </div>
-                         <div id="postbox-container-1" class="postbox-container" > 
-					
-					          <div class="postbox"> 
-					              <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery' );?></h3> 
-					              <div class="inside">
-					                  <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-					
-					                  <div style="margin:10px 5px">
-					
-					                  </div>
-					              </div></div>
-					          
-					
-					      </div> 
+                         <div id="postbox-container-1" class="postbox-container">
+                             <?php wprpg_admin_pro_upgrade_card(); ?>
+                         </div>
                         </div>
                     </div>  
 
@@ -2199,7 +2226,7 @@
     <div style="">  
         <div style="">
             <br/>
-            <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
+            <?php wprpg_admin_pro_upgrade_card_float(); ?>
             <div class="wrap">
                 <h2><?php echo __( 'Slider Preview','wp-responsive-photo-gallery' );?></h2>
                 <br>
@@ -2223,189 +2250,7 @@
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
                             <div style="clear: both;"></div>
-                            <?php $url = plugin_dir_url(__FILE__);  ?>
-                            <div id="divSliderMain_admin" style="max-width:<?php echo $settings['panel_width'];?>px;">
-                                <ul id="<?php echo $slider_id_html;?>">
-                                    <?php
-                                        global $wpdb;
-                                        $imageheight=$settings['panel_height'];
-                                        $imagewidth=$settings['panel_width'];
-                                        $query="SELECT * FROM ".$wpdb->prefix."gv_responsive_slider order by createdon desc";
-                                        $rows=$wpdb->get_results($query,'ARRAY_A');
-
-                                        if(count($rows) > 0){
-                                            foreach($rows as $row){
-
-                                                $imagename=$row['image_name'];
-                                                $imageUploadTo=$pathToImagesFolder.'/'.$imagename;
-                                                $imageUploadTo=str_replace("\\","/",$imageUploadTo);
-                                                $pathinfo=pathinfo($imageUploadTo);
-                                                $filenamewithoutextension=$pathinfo['filename'];
-                                                $outputimg="";
-
-                                                if($settings['panel_scale']=='fit'){
-
-                                                    $outputimg = $baseurl.$imagename;
-
-                                                }else{
-
-                                                    list($width, $height) = getimagesize($pathToImagesFolder."/".$row['image_name']);
-                                                    if($width<$imagewidth){
-                                                        $imagewidth=$width;
-                                                    }
-
-                                                    if($height<$imageheight){
-
-                                                        $imageheight=$height;
-                                                    }
-
-                                                    $imagetoCheck=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                    $imagetoCheckSmall=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                             
-
-                                                    if(file_exists($imagetoCheck)){
-                                                        $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-
-                                                    }
-                                                    else if(file_exists($imagetoCheckSmall)){
-                                                            $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                                                        }
-                                                    else{
-
-                                                        if(file_exists($pathToImagesFolder."/".$row['image_name'])){
-
-                                                            $resizeObj = new resize($pathToImagesFolder."/".$row['image_name']); 
-                                                            $resizeObj -> resizeImage($imagewidth, $imageheight, "exact"); 
-                                                            $resizeObj -> saveImage($pathToImagesFolder."/".$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'], 100); 
-                                                            //$outputimg = plugin_dir_url(__FILE__)."imagestoscroll/".$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                            
-                                                             if(file_exists($imagetoCheck)){
-                                                                    $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                                }
-                                                                else if(file_exists($imagetoCheckSmall)){
-                                                                    $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                                                                }
-
-                                                        }else{
-
-                                                            $outputimg = $baseurl.$imagename;
-                                                        }   
-
-                                                    }
-
-                                                }
-                                            ?>         
-                                            <li><img data-target="1" data-href="<?php echo $row['custom_link'];?>" org-src-="<?php echo $outputimg;?>"  /></li> 
-
-                                            <?php }?>   
-                                        <?php }?>   
-                                </ul>
-                            </div>
-                            <script type="text/javascript">
-                                
-                                jQuery(document).ready(function() {
-
-                                        <?php $galRandNo=rand(0,13313); ?> 
-                                        var galleryItems<?php echo $galRandNo;?>;
-                                        jQuery(function(){
-                                                galleryItems<?php echo $galRandNo;?> = jQuery("#<?php echo $slider_id_html;?>");
-
-                                                var galleryItemDivs = jQuery('#divSliderMain_admin');
-
-                                                galleryItems<?php echo $galRandNo;?>.each(function (index, item){
-                                                        item.parent_data = jQuery(item).parent("#divSliderMain_admin");
-                                                });
-
-
-                                                galleryItemDivs.each(function(index, item){   
-                                                        jQuery("ul",this).galleryView({
-
-                                                                transition_speed:<?php echo $settings['transition_speed'];?>,         //INT - duration of panel/frame transition (in milliseconds)
-                                                                transition_interval:<?php echo $settings['transition_interval'];?>,         //INT - delay between panel/frame transitions (in milliseconds)
-                                                                easing:'<?php echo isset($settings['easing'])?$settings['easing']:'';?>',                 //STRING - easing method to use for animations (jQuery provides 'swing' or 'linear', more available with jQuery UI or Easing plugin)
-                                                                show_panels:<?php echo ($settings['show_panels']==1)?'true':'false' ;?>,                 //BOOLEAN - flag to show or hide panel portion of gallery
-                                                                show_panel_nav:<?php echo ($settings['show_panel_nav']==1)?'true':'false' ;?>,             //BOOLEAN - flag to show or hide panel navigation buttons
-                                                                enable_overlays:<?php echo ($settings['enable_overlays']==1)?'true':'false' ;?>,             //BOOLEAN - flag to show or hide panel overlays
-                                                                panel_width:<?php echo $settings['panel_width'];?>,                 //INT - width of gallery panel (in pixels)
-                                                                panel_height:<?php echo $settings['panel_height'];?>,                 //INT - height of gallery panel (in pixels)
-                                                                panel_animation:'<?php echo $settings['panel_animation'];?>',         //STRING - animation method for panel transitions (crossfade,fade,slide,none)
-                                                                panel_scale: '<?php echo $settings['panel_scale'];?>',             //STRING - cropping option for panel images (crop = scale image and fit to aspect ratio determined by panel_width and panel_height, fit = scale image and preserve original aspect ratio)
-                                                                overlay_position:'<?php echo $settings['overlay_position'];?>',     //STRING - position of panel overlay (bottom, top)
-                                                                pan_images:<?php echo ($settings['pan_images']==1)?'true':'false' ;?>,                //BOOLEAN - flag to allow user to grab/drag oversized images within gallery
-                                                                pan_style:'<?php echo $settings['pan_style'];?>',                //STRING - panning method (drag = user clicks and drags image to pan, track = image automatically pans based on mouse position
-                                                                start_frame:'<?php echo $settings['start_frame'];?>',                 //INT - index of panel/frame to show first when gallery loads
-                                                                show_filmstrip:<?php echo ($settings['show_filmstrip']==1)?'true':'false' ;?>,             //BOOLEAN - flag to show or hide filmstrip portion of gallery
-                                                                show_filmstrip_nav:<?php echo ($settings['show_filmstrip_nav']==1)?'true':'false' ;?>,         //BOOLEAN - flag indicating whether to display navigation buttons
-                                                                enable_slideshow:<?php echo ($settings['enable_slideshow']==1)?'true':'false' ;?>,            //BOOLEAN - flag indicating whether to display slideshow play/pause button
-                                                                autoplay:<?php echo ($settings['autoplay']==1)?'true':'false' ;?>,                //BOOLEAN - flag to start slideshow on gallery load
-                                                                show_captions:<?php echo ($settings['show_captions']==1)?'true':'false' ;?>,             //BOOLEAN - flag to show or hide frame captions    
-                                                                filmstrip_style: '<?php echo $settings['filmstrip_style'];?>',         //STRING - type of filmstrip to use (scroll = display one line of frames, scroll filmstrip if necessary, showall = display multiple rows of frames if necessary)
-                                                                filmstrip_position:'<?php echo $settings['filmstrip_position'];?>',     //STRING - position of filmstrip within gallery (bottom, top, left, right)
-                                                                frame_width:<?php echo $settings['frame_width'];?>,                 //INT - width of filmstrip frames (in pixels)
-                                                                frame_height:<?php echo $settings['frame_width'];?>,                 //INT - width of filmstrip frames (in pixels)
-                                                                frame_opacity:<?php echo $settings['frame_opacity'];?>,             //FLOAT - transparency of non-active frames (1.0 = opaque, 0.0 = transparent)
-                                                                frame_scale: '<?php echo $settings['frame_scale'];?>',             //STRING - cropping option for filmstrip images (same as above)
-                                                                frame_gap:<?php echo $settings['frame_gap'];?>,                     //INT - spacing between frames within filmstrip (in pixels)
-                                                                show_infobar:<?php echo ($settings['show_infobar']==1)?'true':'false' ;?>,                //BOOLEAN - flag to show or hide infobar
-                                                                infobar_opacity:<?php echo $settings['infobar_opacity'];?>,               //FLOAT - transparency for info bar
-                                                                clickable: 'all'
-
-                                                        });     
-
-                                                }); 
-
-                                        });
-
-
-                                        //
-                                        // Resize the image gallery
-                                        //
-                                        var oldsize_w<?php echo $galRandNo;?>=<?php echo $settings['panel_width'];?>;
-                                        var oldsize_h<?php echo $galRandNo;?>=<?php echo $settings['panel_height'];?>;
-
-                                        function resizegallery<?php echo $galRandNo;?>(){
-
-                                            if(galleryItems<?php echo $galRandNo;?>==undefined){return;}
-                                            galleryItems<?php echo $galRandNo;?>.each(function (index, item){
-                                                    var $parent = item.parent_data;
-
-                                                    // width based on parent?
-                                                    var width = ($parent.innerWidth()-10);//2 times 5 pixels margin
-                                                    var height = ($parent.innerHeight()-10);//2 times 5 pixels margin
-                                                    if(oldsize_w<?php echo $galRandNo;?>==width){          
-                                                        return;
-                                                    }
-                                                    oldsize_w<?php echo $galRandNo;?>=width;
-                                                    var resizeToHeight=width/3*2;
-                                                    if(resizeToHeight><?php echo $settings['panel_height'];?>){
-                                                        resizeToHeight=<?php echo $settings['panel_height'];?>;  
-                                                    }
-                                                    thumbfactor = width/(<?php echo $settings['panel_width'];?>-10);
-
-                                                    jQuery(item).resizeGalleryView(
-                                                        width,resizeToHeight, <?php echo $settings['frame_width'];?>*thumbfactor, <?php echo $settings['frame_height'];?>*thumbfactor);
-
-                                            });
-                                        }
-
-                                        var inited<?php echo $galRandNo;?>=false;
-
-                                        function onresize<?php echo $galRandNo;?>(){  
-
-                                            resizegallery<?php echo $galRandNo;?>();
-                                            inited<?php echo $galRandNo;?>=true;
-                                        }
-
-
-                                        jQuery(window).resize(onresize<?php echo $galRandNo;?>);
-                                        jQuery( document ).ready(function() {
-                                                onresize<?php echo $galRandNo;?>();
-                                        }); 
-
-                                });
-
-
-                            </script>      
+                            <?php echo print_my_responsive_photo_gallery_func(); ?>
                         </div>
                     </div>      
                 </div>  
@@ -2419,10 +2264,21 @@
     <h3><?php echo __( 'To print this slideshow gallery into WordPress theme/template PHP files use below php code','wp-responsive-photo-gallery' );?></h3>
     <input type="text" value="&lt;?php echo do_shortcode('[print_my_responsive_photo_gallery]'); ?&gt;" style="width: 400px;height: 30px" onclick="this.focus();this.select()" />
     <div class="clear"></div>
+    <h3><?php echo __( 'Or use the block','wp-responsive-photo-gallery' );?></h3>
+    <p><?php echo __( 'In the block editor, add the "Photo Gallery Slideshow" block from the block inserter — no shortcode needed.','wp-responsive-photo-gallery' );?></p>
+    <div class="clear"></div>
     <?php       
     }
 
     function print_my_responsive_photo_gallery_func(){
+        $settings=get_option('my_responsive_photo_gallery_slider_settings');
+        if(isset($settings['slider_engine']) and $settings['slider_engine']=='legacy'){
+            return print_my_responsive_photo_gallery_func_legacy();
+        }
+        return print_my_responsive_photo_gallery_func_modern();
+    }
+
+    function print_my_responsive_photo_gallery_func_legacy(){
 
         $settings=get_option('my_responsive_photo_gallery_slider_settings');
         $rand_Numb=uniqid('gallery_slider');
@@ -2507,7 +2363,7 @@
 
                         }
                     ?>         
-                    <li><img data-target="1" data-href="<?php echo $row['custom_link'];?>" org-src-="<?php echo $outputimg;?>"  /></li> 
+                    <li><img data-target="1" data-href="<?php echo $row['custom_link'];?>" org-src-="<?php echo $outputimg;?>" data-frame="<?php echo esc_url($baseurl.$imagename); ?>" title="<?php echo esc_attr(isset($row['title'])?$row['title']:''); ?>"  /></li> 
 
                     <?php }?>   
                 <?php }?>   
@@ -2627,6 +2483,144 @@
 
 
     </script><!-- end print_my_responsive_photo_gallery_func --><?php
+        $output = ob_get_clean();
+        return $output;
+    }
+
+    function print_my_responsive_photo_gallery_func_modern(){
+
+        $settings=get_option('my_responsive_photo_gallery_slider_settings');
+        $rand_Numb=uniqid('gallery_slider_m');
+        $wpcurrentdir=dirname(__FILE__);
+        $wpcurrentdir=str_replace("\\","/",$wpcurrentdir);
+
+        $uploads = wp_upload_dir ();
+        $baseDir = $uploads ['basedir'];
+        $baseDir = str_replace ( "\\", "/", $baseDir );
+        $pathToImagesFolder = $baseDir . '/wp-responsive-photo-gallery';
+
+        $baseurl=$uploads['baseurl'];
+        $baseurl.='/wp-responsive-photo-gallery/';
+
+        wp_enqueue_style('rjg-modern-slider');
+        wp_enqueue_script('rjg-modern-slider');
+
+        global $wpdb;
+        $imageheight=$settings['panel_height'];
+        $imagewidth=$settings['panel_width'];
+        $query="SELECT * FROM ".$wpdb->prefix."gv_responsive_slider order by createdon desc";
+        $rows=$wpdb->get_results($query,'ARRAY_A');
+
+        $images=array();
+
+        if(count($rows) > 0){
+            foreach($rows as $row){
+
+                $imagename=$row['image_name'];
+                $imageUploadTo=$pathToImagesFolder.'/'.$imagename;
+                $imageUploadTo=str_replace("\\","/",$imageUploadTo);
+                $pathinfo=pathinfo($imageUploadTo);
+                $filenamewithoutextension=$pathinfo['filename'];
+                $outputimg="";
+
+                if($settings['panel_scale']=='fit'){
+
+                    $outputimg = $baseurl.$imagename;
+
+                }else{
+                    list($width, $height) = getimagesize($pathToImagesFolder."/".$row['image_name']);
+                    if($width<$imagewidth){
+                        $imagewidth=$width;
+                    }
+
+                    if($height<$imageheight){
+
+                        $imageheight=$height;
+                    }
+
+                    $imagetoCheck=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
+                    $imagetoCheckSmall=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
+
+                    if(file_exists($imagetoCheck)){
+                        $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
+
+                    }
+                    else if(file_exists($imagetoCheckSmall)){
+                        $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
+                    }
+                    else{
+
+                        if(file_exists($pathToImagesFolder."/".$row['image_name'])){
+
+                            $resizeObj = new resize($pathToImagesFolder."/".$row['image_name']);
+                            $resizeObj -> resizeImage($imagewidth, $imageheight, "exact");
+                            $resizeObj -> saveImage($pathToImagesFolder."/".$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'], 100);
+                            $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
+                        }else{
+
+                            $outputimg = $baseurl.$imagename;
+                        }
+
+                    }
+
+                }
+
+                $images[] = array(
+                    'src'   => $outputimg,
+                    'thumb' => $baseurl.$imagename,
+                    'link'  => isset($row['custom_link']) ? $row['custom_link'] : '',
+                    'title' => isset($row['title']) ? $row['title'] : '',
+                );
+
+            }
+        }
+
+        $scale_class = ($settings['panel_scale']=='fit') ? 'rjg-scale-fit' : 'rjg-scale-crop';
+        $show_nav = (isset($settings['show_panel_nav']) and $settings['show_panel_nav']==1);
+        $show_filmstrip = (isset($settings['show_filmstrip']) and $settings['show_filmstrip']==1);
+        $show_captions = (isset($settings['show_captions']) and $settings['show_captions']==1);
+        $show_infobar = (isset($settings['show_infobar']) and $settings['show_infobar']==1);
+        $infobar_opacity = isset($settings['infobar_opacity']) ? floatval($settings['infobar_opacity']) : 1;
+        $frame_opacity = isset($settings['frame_opacity']) ? floatval($settings['frame_opacity']) : 0.4;
+        $frame_gap = isset($settings['frame_gap']) ? (int)$settings['frame_gap'] : 6;
+        $thumb_scale_class = (isset($settings['frame_scale']) and $settings['frame_scale']=='fit') ? 'rjg-thumb-fit' : 'rjg-thumb-crop';
+        $autoplay = (isset($settings['autoplay']) and $settings['autoplay']==1) ? '1' : '0';
+
+        ob_start();
+    ?><!-- print_my_responsive_photo_gallery_func --><div class="rjg-mslider" id="<?php echo esc_attr($rand_Numb); ?>" data-speed="<?php echo (int)$settings['transition_speed']; ?>" data-interval="<?php echo (int)$settings['transition_interval']; ?>" data-autoplay="<?php echo $autoplay; ?>" data-total="<?php echo count($images); ?>" style="max-width:<?php echo (int)$settings['panel_width'];?>px;--rjg-frame-opacity:<?php echo esc_attr($frame_opacity); ?>;--rjg-frame-gap:<?php echo (int)$frame_gap; ?>px;">
+        <div class="rjg-mslider-stage" style="height:<?php echo (int)$settings['panel_height'];?>px;" tabindex="0">
+            <?php foreach($images as $i => $image): ?>
+                <div class="rjg-mslider-slide <?php echo esc_attr($scale_class); ?><?php echo ($i===0)?' is-active':''; ?>">
+                    <?php if(!empty($image['link'])): ?>
+                        <a href="<?php echo esc_url($image['link']); ?>" target="_blank" rel="noopener">
+                            <img src="<?php echo esc_url($image['src']); ?>" alt="<?php echo esc_attr($image['title']); ?>" loading="<?php echo ($i===0)?'eager':'lazy'; ?>" />
+                        </a>
+                    <?php else: ?>
+                        <img src="<?php echo esc_url($image['src']); ?>" alt="<?php echo esc_attr($image['title']); ?>" loading="<?php echo ($i===0)?'eager':'lazy'; ?>" />
+                    <?php endif; ?>
+                    <?php if($show_captions and !empty($image['title'])): ?>
+                        <div class="rjg-mslider-caption"><?php echo esc_html($image['title']); ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+            <?php if($show_nav and count($images) > 1): ?>
+                <button type="button" class="rjg-mslider-nav rjg-prev" aria-label="<?php echo esc_attr__( 'Previous','wp-responsive-photo-gallery' ); ?>">&#10094;</button>
+                <button type="button" class="rjg-mslider-nav rjg-next" aria-label="<?php echo esc_attr__( 'Next','wp-responsive-photo-gallery' ); ?>">&#10095;</button>
+            <?php endif; ?>
+            <?php if($show_infobar and count($images) > 0): ?>
+                <div class="rjg-mslider-infobar is-visible" style="opacity:<?php echo esc_attr($infobar_opacity); ?>;">1 / <?php echo count($images); ?></div>
+            <?php endif; ?>
+        </div>
+        <?php if($show_filmstrip and count($images) > 1): ?>
+            <div class="rjg-mslider-filmstrip">
+                <?php foreach($images as $i => $image): ?>
+                    <button type="button" class="rjg-mslider-thumb <?php echo esc_attr($thumb_scale_class); ?><?php echo ($i===0)?' is-active':''; ?>">
+                        <img src="<?php echo esc_url($image['thumb']); ?>" alt="" style="width:<?php echo (int)$settings['frame_width'];?>px;height:<?php echo (int)$settings['frame_height'];?>px;" loading="lazy" />
+                    </button>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div><!-- end print_my_responsive_photo_gallery_func --><?php
         $output = ob_get_clean();
         return $output;
     }
@@ -3125,6 +3119,7 @@ function rjg_responsive_justified_gallery_with_lightbox_admin_options_func() {
                     $BackgroundColor = sanitize_text_field( $_POST['BackgroundColor']); 
                     $show_hover_caption = intval(sanitize_text_field( $_POST['show_hover_caption'] )); 
                     $show_hover_icon = intval(sanitize_text_field( $_POST['show_hover_icon'] )); 
+                    $masonry_engine = (isset($_POST['masonry_engine']) and $_POST['masonry_engine']=='legacy')?'legacy':'modern';
                    
                      $rjg_settings=array(
 
@@ -3133,7 +3128,8 @@ function rjg_responsive_justified_gallery_with_lightbox_admin_options_func() {
                             'imageMargin'=>$imageMargin,
                              'page_size'=>$page_size,
                              'show_hover_caption'=>$show_hover_caption,   
-                             'show_hover_icon'=>$show_hover_icon
+                             'show_hover_icon'=>$show_hover_icon,
+                             'masonry_engine'=>$masonry_engine
 
                         );
 
@@ -3158,30 +3154,6 @@ function rjg_responsive_justified_gallery_with_lightbox_admin_options_func() {
             <div style="width: 100%;">
 		<div style="float: left; width: 100%;">
                 	<div class="wrap">
-                           <table>
-                               <tr>
-                                   
-                                    <td>
-                                       <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                                       <div id="fb-root"></div>
-                                         <script>(function(d, s, id) {
-                                           var js, fjs = d.getElementsByTagName(s)[0];
-                                           if (d.getElementById(id)) return;
-                                           js = d.createElement(s); js.id = id;
-                                           js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                                           fjs.parentNode.insertBefore(js, fjs);
-                                         }(document, 'script', 'facebook-jssdk'));</script>
-                                        </td>
-                                         <td>
-                                         <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                                     <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                                                 </a>
-                                             </td>
-                            </tr>
-                        </table>
-                        <div style="clear:both">
-                            <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                        </div>     
                         <?php
                             $messages=get_option('my_responsive_photo_gallery_slider_settings_messages'); 
                             $type='';
@@ -3209,6 +3181,27 @@ function rjg_responsive_justified_gallery_with_lightbox_admin_options_func() {
                                                 <form method="post" action="" id="scrollersettiings"
                                                         name="scrollersettiings">
                                                         
+                                                        <div class="stuffbox" id="namediv" style="width: 100%;">
+                                                                <h3>
+                                                                        <label><?php echo __('Masonry Engine','wp-responsive-photo-gallery');?></label>
+                                                                </h3>
+                                                                <div class="inside">
+                                                                        <table>
+                                                                                <tr>
+                                                                                        <td>
+                                                                                                <select id="masonry_engine" name="masonry_engine" class="select">
+                                                                                                        <option <?php if(!isset($settings['masonry_engine']) or $settings['masonry_engine']=='modern'):?> selected="selected" <?php endif;?> value="modern"><?php echo __( 'Modern (recommended)','wp-responsive-photo-gallery' );?></option>
+                                                                                                        <option <?php if(isset($settings['masonry_engine']) and $settings['masonry_engine']=='legacy'):?> selected="selected" <?php endif;?> value="legacy"><?php echo __( 'Legacy','wp-responsive-photo-gallery' );?></option>
+                                                                                                </select>
+                                                                                                <p class="description"><?php echo __( 'Modern uses a lightweight, dependency-free grid and lightbox. Legacy keeps the original jQuery-based grid and lightbox.','wp-responsive-photo-gallery' );?></p>
+                                                                                                <div style="clear: both"></div>
+                                                                                                <div></div></td>
+                                                                                </tr>
+                                                                        </table>
+
+                                                                        <div style="clear: both"></div>
+                                                                </div>
+                                                        </div>
                                                         <div class="stuffbox" id="namediv" style="width: 100%;">
                                                                 <h3>
                                                                         <label><?php echo __('Gallery Background color','wp-responsive-photo-gallery');?></label>
@@ -3404,28 +3397,9 @@ function rjg_responsive_justified_gallery_with_lightbox_admin_options_func() {
                                           </script>
 
                                         </div>
-                                        <div id="postbox-container-1" class="postbox-container" > 
-
-                                        <div class="postbox"> 
-                                            <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery' );?></h3> 
-                                            <div class="inside">
-                                                <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-
-                                                <div style="margin:10px 5px">
-
-                                                </div>
-                                            </div></div>
-                                        <div class="postbox"> 
-                                        <center><h3 class="hndle"><span></span><?php echo __( 'Google For Business','wp-responsive-photo-gallery');?></h3> </center>
-                                        <div class="inside">
-                                            <center><a target="_blank" href="https://goo.gl/OJBuHT"><img style="max-width:350px;width:100%" src="<?php echo plugins_url( 'images/gsuite_promo.png', __FILE__ ) ;?>" border="0"></a></center>
-                                            <div style="margin:10px 5px">
-                                            </div>
-                                        </div></div>
-
-                                         
-
-                                    </div> 
+                                        <div id="postbox-container-1" class="postbox-container">
+                                            <?php wprpg_admin_pro_upgrade_card(); ?>
+                                        </div>
 			          </div>
 			      </div>
 			</div>
@@ -3495,28 +3469,6 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
 		?> 
             <div class="wrap">
 		
-                  <table><tr>
-                          <td>
-                          <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                          <div id="fb-root"></div>
-                            <script>(function(d, s, id) {
-                              var js, fjs = d.getElementsByTagName(s)[0];
-                              if (d.getElementById(id)) return;
-                              js = d.createElement(s); js.id = id;
-                              js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                              fjs.parentNode.insertBefore(js, fjs);
-                            }(document, 'script', 'facebook-jssdk'));</script>
-                      </td>
-                        <td>
-                            <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                            </a>
-                        </td>
-                    </tr>
-                </table>
-                <div style="clear:both">
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                </div>  
                 <?php
 		$messages = get_option ( 'my_responsive_photo_gallery_slider_settings_messages' );
 		$type = '';
@@ -3956,27 +3908,9 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                         <div class="clear"></div>
                     </div>  
                    	
-                    <div id="postbox-container-1" class="postbox-container"  > 
-
-                        <div class="postbox"> 
-                            <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery');?></h3> 
-                            <div class="inside">
-                                <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-
-                                <div style="margin:10px 5px">
-
-                                </div>
-                            </div></div>
-                        <div class="postbox"> 
-                            <center><h3 class="hndle"><span></span><?php echo __( 'Google For Business','wp-responsive-photo-gallery');?></h3> </center>
-                            <div class="inside">
-                                <center><a target="_blank" href="https://goo.gl/OJBuHT"><img style="width:100%" src="<?php echo plugins_url( 'images/gsuite_promo.png', __FILE__ ) ;?>" border="0"></a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div></div>
-                        
-
-                    </div>    
+                    <div id="postbox-container-1" class="postbox-container">
+                        <?php wprpg_admin_pro_upgrade_card(); ?>
+                    </div>
                </div> 
                         
            </div>       
@@ -4553,28 +4487,6 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
 			?>
               <div style="float: left; width: 100%;">
              
-               <table><tr>
-                        <td>
-                          <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                          <div id="fb-root"></div>
-                            <script>(function(d, s, id) {
-                              var js, fjs = d.getElementsByTagName(s)[0];
-                              if (d.getElementById(id)) return;
-                              js = d.createElement(s); js.id = id;
-                              js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                              fjs.parentNode.insertBefore(js, fjs);
-                            }(document, 'script', 'facebook-jssdk'));</script>
-                      </td>
-                        <td>
-                            <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                            </a>
-                        </td>
-                    </tr>
-                </table>
-                <div style="clear:both">
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                </div>  
 	       <div class="wrap">
 	    	<?php
 		    	if (isset ( $_GET ['id'] ) and intval($_GET ['id']) > 0) {
@@ -5736,26 +5648,8 @@ function rjg_responsive_justified_gallery_with_lightbox_media_management_func() 
                                                                  </script>
 
 							</div>
-                                                    <div id="postbox-container-1" class="postbox-container"  > 
-
-                                                        <div class="postbox"> 
-                                                            <h3 class="hndle"><span></span><?php echo __( 'Access All Themes In One Price','wp-responsive-photo-gallery');?></h3> 
-                                                            <div class="inside">
-                                                                <center><a href="http://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_0_1_10" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.gif', __FILE__ );?>" width="250" height="250"></a></center>
-
-                                                                <div style="margin:10px 5px">
-
-                                                                </div>
-                                                            </div></div>
-                                                        <div class="postbox"> 
-                                                            <center><h3 class="hndle"><span></span><?php echo __( 'Google For Business','wp-responsive-photo-gallery');?></h3> </center>
-                                                            <div class="inside">
-                                                                <center><a target="_blank" href="https://goo.gl/OJBuHT"><img style="width:100%" src="<?php echo plugins_url( 'images/gsuite_promo.png', __FILE__ ) ;?>" border="0"></a></center>
-                                                                <div style="margin:10px 5px">
-                                                                </div>
-                                                            </div></div>
-                                                        
-
+                                                    <div id="postbox-container-1" class="postbox-container">
+                                                        <?php wprpg_admin_pro_upgrade_card(); ?>
                                                     </div>
 						</div>
 					</div>
@@ -5979,6 +5873,7 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
 
                $altered = str_replace("<p>","",$matches[1]);
                $altered = str_replace("</p>","",$altered);
+               $altered = str_replace(array("<br />","<br/>","<br>"),"",$altered);
               
                 $altered=str_replace("&#038;","&",$altered);
                 $altered=str_replace("&#8221;",'"',$altered);
@@ -6003,6 +5898,14 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
   
   
   function rjg_print_masonry_gallery_plus_lightbox_func($atts) {
+        $settings=get_option('rjg_settings');
+        if(isset($settings['masonry_engine']) and $settings['masonry_engine']=='legacy'){
+            return rjg_print_masonry_gallery_plus_lightbox_func_legacy($atts);
+        }
+        return rjg_print_masonry_gallery_plus_lightbox_func_modern($atts);
+    }
+
+  function rjg_print_masonry_gallery_plus_lightbox_func_legacy($atts) {
     
 
 	global $wpdb;
@@ -6346,6 +6249,118 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
     	$output = ob_get_clean ();
 	return $output;
 }
+
+function rjg_print_masonry_gallery_plus_lightbox_func_modern($atts) {
+
+    global $wpdb;
+    $settings = get_option('rjg_settings');
+    $pagenum = isset($_GET['pagenum']) ? (int) absint($_GET['pagenum']) : 1;
+    $limit = $settings['page_size'];
+    $offset = ( $pagenum - 1 ) * $limit;
+
+    $app_id = uniqid('rjg_mgrid_');
+    $group_id = uniqid('rjg_grp_');
+
+    $uploads = wp_upload_dir();
+    $baseDir = $uploads['basedir'];
+    $baseDir = str_replace("\\","/",$baseDir);
+    $pathToImagesFolder = $baseDir . '/wp-responsive-photo-gallery';
+    $baseurl = $uploads['baseurl'];
+    $baseurl .= '/wp-responsive-photo-gallery/';
+
+    wp_enqueue_style('rjg-modern-masonry');
+    wp_enqueue_style('rjg-modern-lightbox');
+    wp_enqueue_script('rjg-modern-masonry');
+    wp_enqueue_script('rjg-modern-lightbox');
+
+    $query = "SELECT * FROM " . $wpdb->prefix . "rjg_gallery order by createdon desc LIMIT $offset, $limit";
+    $rows = $wpdb->get_results($query, 'ARRAY_A');
+
+    $col_width = isset($settings['imageheight']) ? (int)$settings['imageheight'] : 220;
+    $gap = isset($settings['imageMargin']) ? (int)$settings['imageMargin'] : 8;
+    $show_caption = (isset($settings['show_hover_caption']) and $settings['show_hover_caption']==1);
+    $show_icon = (isset($settings['show_hover_icon']) and $settings['show_hover_icon']==1);
+    $bg_color = isset($settings['BackgroundColor']) ? $settings['BackgroundColor'] : '#ffffff';
+    if(strtolower($bg_color)=='none'){
+        $bg_color = '#ffffff';
+    }
+
+    ob_start();
+    ?><!-- rjg_print_masonry_gallery_plus_lightbox_func --><div class="rjg-mgrid-app" id="<?php echo esc_attr($app_id); ?>">
+        <div class="rjg-mgrid" style="--rjg-col-width:<?php echo (int)$col_width; ?>px;--rjg-gap:<?php echo (int)$gap; ?>px;background-color:<?php echo esc_attr($bg_color); ?>;">
+            <?php if(count($rows) > 0): foreach($rows as $row):
+                $imagename = $row['image_name'];
+                $media_type = $row['media_type'];
+                $outputimgmain = $baseurl.$imagename;
+                $rowTitle = isset($row['title']) ? $row['title'] : '';
+                $open_link_in = isset($row['open_link_in']) ? $row['open_link_in'] : 1;
+                $openTarget = $open_link_in ? '_blank' : '_self';
+
+                $video_url_org = $row['murl'];
+                $Url_vid = @parse_url($video_url_org);
+                $relend = '';
+                if (isset($Url_vid['query']) and $Url_vid['query'] != '') {
+                    parse_str($Url_vid['query'], $get_array);
+                    if (is_array($get_array) and sizeof($get_array) > 0) {
+                        $flag = false;
+                        foreach ($get_array as $k => $v) {
+                            $relend .= ($flag ? '&' : '?') . "$k=$v";
+                            $flag = true;
+                        }
+                    }
+                }
+                $embed_url = $row['embed_url'].$relend;
+            ?>
+                <div class="rjg-mgrid-item-wrap">
+                    <?php if($media_type=='image' or $media_type=='video'): ?>
+                        <a class="rjg-mgrid-item rjg-lightbox-trigger"
+                           data-lightbox-group="<?php echo esc_attr($group_id); ?>"
+                           data-type="<?php echo esc_attr($media_type); ?>"
+                           data-caption="<?php echo esc_attr($rowTitle); ?>"
+                           href="<?php echo esc_url($media_type=='video' ? $embed_url : $outputimgmain); ?>">
+                            <span class="rjg-mgrid-imgbox" style="background-color:<?php echo esc_attr($bg_color); ?>;">
+                                <img src="<?php echo esc_url($outputimgmain); ?>" alt="<?php echo esc_attr($rowTitle); ?>" loading="lazy" />
+                                <?php if($show_icon and $media_type=='video'): ?><span class="rjg-mgrid-playicon"></span><?php elseif($show_icon and $media_type=='image'): ?><span class="rjg-mgrid-zoomicon"></span><?php endif; ?>
+                            </span>
+                            <?php if($show_caption and !empty($rowTitle)): ?>
+                                <span class="rjg-mgrid-caption"><?php echo esc_html($rowTitle); ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php else: /* media_type == 'link': no lightbox, opens the external URL directly */ ?>
+                        <a class="rjg-mgrid-item" target="<?php echo esc_attr($openTarget); ?>" href="<?php echo esc_url($row['murl']); ?>" rel="noopener">
+                            <span class="rjg-mgrid-imgbox" style="background-color:<?php echo esc_attr($bg_color); ?>;">
+                                <img src="<?php echo esc_url($outputimgmain); ?>" alt="<?php echo esc_attr($rowTitle); ?>" loading="lazy" />
+                            </span>
+                            <?php if($show_caption and !empty($rowTitle)): ?>
+                                <span class="rjg-mgrid-caption"><?php echo esc_html($rowTitle); ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; endif; ?>
+        </div>
+        <?php
+            $total = $wpdb->get_var("SELECT COUNT(`id`) FROM {$wpdb->prefix}rjg_gallery ");
+            $num_of_pages = ceil($total / $limit);
+            $page_links = paginate_links(array(
+                'base' => add_query_arg('pagenum', '%#%'),
+                'format' => '',
+                'prev_text' => __('&laquo;', 'aag'),
+                'next_text' => __('&raquo;', 'aag'),
+                'total' => $num_of_pages,
+                'current' => $pagenum,
+                'prev_next' => true,
+                'type' => 'list',
+            ));
+            if ($page_links) {
+                echo '<div class="rjg-mgrid-pagination">' . $page_links . '</div>';
+            }
+        ?>
+    </div><!-- end rjg_print_masonry_gallery_plus_lightbox_func --><?php
+    $output = ob_get_clean();
+    return $output;
+}
+
 function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
     
 	global $wpdb;
@@ -6400,310 +6415,8 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
                         <div style="width: 100%;">
                             <br/>
                            <div style="float: left; width: 100%;">
-                               <table><tr>
-                                <td>
-                                    <div class="fb-like" data-href="https://www.facebook.com/i13websolution" data-layout="button" data-action="like" data-size="large" data-show-faces="false" data-share="false"></div>
-                                    <div id="fb-root"></div>
-                                      <script>(function(d, s, id) {
-                                        var js, fjs = d.getElementsByTagName(s)[0];
-                                        if (d.getElementById(id)) return;
-                                        js = d.createElement(s); js.id = id;
-                                        js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2&appId=158817690866061&autoLogAppEvents=1';
-                                        fjs.parentNode.insertBefore(js, fjs);
-                                      }(document, 'script', 'facebook-jssdk'));</script>
-                                </td>
-                                <td>
-                                    <a target="_blank" title="Donate" href="http://i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                        <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                                    </a>
-                                </td>
-                            </tr>
-                        </table>
-                        <div style="clear:both">
-                            <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/"><?php echo __( 'UPGRADE TO PRO VERSION','wp-responsive-photo-gallery' );?></a></h3></span>
-                        </div>  
 		        <h2><?php echo __('Masonry Gallery Preview','wp-responsive-photo-gallery');?></h2>
-                        
-                            <?php if (is_array($settings)) { 
-                                
-                                ?>
-                                 
-                                                <div style="clear: both;"></div>
-                                                <?php $url = plugin_dir_url(__FILE__); ?>           
-                                                 <div style="clear: both;"></div>
-                                                    <?php $url = plugin_dir_url(__FILE__); ?>           
-                              
-                              
-                                                        <div class="gallery_wrap0" id="<?php echo $rand_Num_td;?>" >
-                                                            
-                                                                <div class="gallery_ gallery_0" id="<?php echo $rand_var_name;?>" >
-                                        
-                                                                <div id="<?php echo $rand_var_name; ?>_overlay_grid" class="overlay_grid" style="background: <?php echo $LoadingBackColor; ?> url('<?php echo $loaderImg; ?>') no-repeat scroll 50% 50%;" ></div>
-                                                
-                                                                                <?php
-
-                                                                                  $imageheight = $settings ['imageheight'];
-                                                                                  $query = "SELECT * FROM " . $wpdb->prefix . "rjg_gallery  order by createdon desc LIMIT $offset, $limit";
-                                                                                  $firstChild='firstimg';
-                                                                                  $rows = $wpdb->get_results ( $query, 'ARRAY_A' );
-
-
-                                                                                  if (count ( $rows ) > 0) {
-
-                                                                                      foreach ( $rows as $row ) {
-
-                                                                                              $imagename = $row ['image_name'];
-                                                                                              $video_url = $row ['videourl'];
-                                                                                              $video_url_org = $row ['murl'];
-                                                                                              $Url_vid = @parse_url($video_url_org);
-
-
-                                                                                             
-                                                                                              $relend = '';
-                                                                                               $flag=false;
-                                                                                                  if (isset($Url_vid['query']) and $Url_vid['query'] != '') {
-
-
-                                                                                                      parse_str($Url_vid['query'], $get_array);
-                                                                                                      if(is_array($get_array) and sizeof($get_array)>0){
-
-                                                                                                         foreach($get_array as $k=>$v){
-
-                                                                                                             if($flag==false){
-
-                                                                                                                 $flag=true;
-                                                                                                                 $relend.="?$k=$v";
-                                                                                                             }
-                                                                                                             else{
-
-                                                                                                                 $relend.="&$k=$v";
-
-                                                                                                             }
-
-
-                                                                                                         } 
-
-
-                                                                                                      }
-
-
-
-                                                                                                  }
-
-                                                                                              $vtype= $row ['vtype'];
-                                                                                              $imageUploadTo = $pathToImagesFolder . '/' . $imagename;
-                                                                                              $imageUploadTo = str_replace ( "\\", "/", $imageUploadTo );
-                                                                                              $pathinfo = pathinfo ( $imageUploadTo );
-                                                                                              $filenamewithoutextension = $pathinfo ['filename'];
-
-                                                                                              $outputimgmain = $baseurl . $row ['image_name'];
-                                                                                              $outputimg=$outputimgmain;
-                                                                                              $media_type=$row['media_type'];  
-                                                                                              $hoverClass='';
-                                                                                              if($media_type=="link")
-                                                                                                   $hoverClass="playbtnCss_link";
-                                                                                              else if($media_type=="video")
-                                                                                                   $hoverClass="playbtnCss_video";
-                                                                                               else if($media_type=="image")
-                                                                                                    $hoverClass="playbtnCss_zoom";
-
-                                                                                                  $title = "";
-                                                                                                  $rowTitle = $row['title'];
-                                                                                                  $rowTitle = str_replace("'", "’", $rowTitle);
-                                                                                                  $rowTitle = str_replace('"', '”', $rowTitle);
-
-                                                                                                
-
-                                                                                                  $open_link_in = $row['open_link_in'];
-                                                                                                  $open_title_link_in = 1;
-
-                                                                                                  if(!$open_title_link_in)
-                                                                                                      $openImageInNewTab = '_self';
-                                                                                                  else
-                                                                                                      $openImageInNewTab = '_blank';
-
-                                                                                                  $embed_url=$row['embed_url'].$relend;
-                                                                                                 if($media_type=="video"){
-
-                                                                                                      if (trim($row['title']) != '' and trim($row['videourl']) != '') {
-
-                                                                                                          $title = "<a class='Imglink' target='$openImageInNewTab' href='{$row['videourl']}'>{$rowTitle}</a>";
-                                                                                                      
-                                                                                                      } else if (trim($row['title']) != '' and trim($row['videourl']) == '') {
-
-                                                                                                          $title = "<a class='Imglink' >{$rowTitle}</a>";
-                                                                                                         
-                                                                                                      } else {
-
-                                                                                                          if ($row['mdescription'] != '')
-                                                                                                              $title = "<div class='clear_description_'>{$row['mdescription']}</div>";
-
-                                                                                                      }
-                                                                                                 }
-                                                                                                 else if($media_type=="image"){
-
-                                                                                                     if (trim($row['title']) != '' and trim($row['murl']) != '') {
-
-                                                                                                          $title = "<a class='Imglink' target='$openImageInNewTab' href='{$row['murl']}'>{$rowTitle}</a>";
-                                                                                                         
-                                                                                                      } else if (trim($row['title']) != '' and trim($row['murl']) == '') {
-
-                                                                                                          $title = "<a class='Imglink' >{$rowTitle}</a>";
-                                                                                                          
-                                                                                                      } else {
-
-                                                                                                          if ($row['mdescription'] != '')
-                                                                                                              $title = "<div class='clear_description_'>{$row['mdescription']}</div>";
-
-                                                                                                      }
-
-                                                                                                 }
-
-
-                                                                                      ?>
-
-                                                                                          <?php if($media_type=='image' or $media_type=='video') :?>
-
-                                                                                                  <?php if ($open_link_in == 1): ?>
-                                                                                                     <a data-rel="<?php echo $randOmeRel; ?>"  data-overlay="1" data-type="<?php echo $media_type;?>"  data-title="<?php echo $title; ?>" class="thumbnail_ <?php echo $randOmVlBox; ?> <?php if($media_type=='video'):?>iframe <?php endif;?> "  href="<?php if($media_type=='video'):?><?php echo $embed_url; ?> <?php else:?><?php echo $outputimgmain; ?><?php endif;?>"  >
-                                                                                                          <figure class="<?php echo $target;?> figure__" data-title="<?php echo $rowTitle;?>" data-url="<?php echo $outputimgmain;?>"></figure> 
-                                                                                                      </a>
-                                                                                                   <?php else: ?>
-
-                                                                                                       <a   data-type="<?php echo $media_type;?>" data-overlay="1" data-title="<?php echo $title; ?>" class="thumbnail_ "  href="<?php if($media_type=='video'):?><?php echo $embed_url; ?> <?php else:?><?php echo $outputimgmain; ?><?php endif;?>" >
-                                                                                                          <figure class="<?php echo $target;?> figure__" data-title="<?php echo $rowTitle;?>" data-url="<?php echo $outputimgmain;?>"></figure>
-                                                                                                      </a>
-                                                                                                   <?php endif;?>
-
-                                                                                           <?php else:?>
-                                                                                               <a   data-type="<?php echo $media_type;?>" target='<?php echo $openImageInNewTab;?>' class="thumbnail_ "  href="<?php echo $row['murl']; ?>" >
-                                                                                                 <figure class="<?php echo $target;?> figure__" data-title="<?php echo $rowTitle;?>" data-url="<?php echo $outputimgmain;?>"></figure>
-                                                                                              </a> 
-
-                                                                                           <?php endif;?>
-
-
-
-                                                                                          <?php } ?>   
-
-                                                                               <?php } ?>   
-                                                                                  <br style="clear: both;">
-                                                                              </div>
-                                                                            <?php
-                                                                            $total = $wpdb->get_var("SELECT COUNT(`id`) FROM {$wpdb->prefix}rjg_gallery ");
-                                                                            $num_of_pages = ceil($total / $limit);
-                                                                            $page_links = paginate_links(array(
-                                                                                'base' => add_query_arg('pagenum', '%#%'),
-                                                                                'format' => '',
-                                                                                'prev_text' => __('&laquo;', 'aag'),
-                                                                                'next_text' => __('&raquo;', 'aag'),
-                                                                                'total' => $num_of_pages,
-                                                                                'current' => $pagenum,
-                                                                                'prev_next' => true,
-                                                                                'type' => 'list',
-                                                                                    ));
-
-                                                                            if ($page_links) {
-                                                                                  echo '<div class="navigation_grid_rjg" style="margin-bottom:10px;display:table">' . $page_links . '</div>';
-
-                                                                            }
-                                                                            ?>    
-                                                 
-                                                                    <div style="clear:both"></div>
-                                                        </div>
-
-                                                        <script>
-                                                            
-                                                            <?php $uniqId = uniqid(); ?>
-                                                             var uniqObj<?php echo $uniqId ?> = jQuery("a[data-rel='<?php echo $randOmeRel; ?>']");
-
-                                                            jQuery(document).ready(function() {
-
-
-
-                                                                    jQuery("#<?php echo $rand_var_name;?>").latae({
-                                                                        loader : '<?php echo plugins_url( 'images/loader.gif', __FILE__ ) ;?>',
-                                                                        max_height:<?php echo $settings ['imageheight'];?>,
-                                                                        margin:<?php echo $settings ['imageMargin'];?>,
-                                                                        target:'<?php echo $target;?>',
-                                                                        init : function() { },
-                                                                        loadPicture : function(event, img) {  },
-                                                                        resize : function(event, gallery) {  },
-                                                                        displayTitle: <?php echo ($settings['show_hover_caption']==1) ?  'true':'false' ?>,
-                                                                        displayIcons: <?php echo ($settings['show_hover_icon']==1) ?  'true':'false' ?>
-                                                                    });
-
-                                                                jQuery(".<?php echo $randOmVlBox; ?>").fancybox_rjg({
-
-                                                                'overlayColor':'#000000',
-                                                                'padding': 3,
-                                                                'margin': 20,
-                                                                'autoScale': true,
-                                                                'autoDimensions':true,
-                                                                'uniqObj':uniqObj<?php echo $uniqId; ?>,
-                                                                'uniqRel':'<?php echo $randOmeRel; ?>',
-                                                                'transitionIn':'fade',
-                                                                'transitionOut':'fade',
-                                                                'titlePosition': 'outside',
-                                                                 'cyclic':true,
-                                                                'hideOnContentClick':false,
-                                                                'width' : 650,
-                                                                'height' : 400,
-                                                                 'titleFormat': function(title, currentArray, currentIndex, currentOpts) {
-
-                                                                        var currtElem = jQuery('#<?php echo $rand_var_name; ?> a[href="' + currentOpts.href + '"]');
-                                                                                var isoverlay = jQuery(currtElem).attr('data-overlay')
-
-                                                                         if (isoverlay == "1" && jQuery.trim(title) != ""){
-                                                                                return '<span id="fancybox_rjg-title-over">' + title + '</span>';
-                                                                        }
-                                                                        else{
-                                                                             return '';
-                                                                        }
-
-                                                                        }
-                                                                });
-
-                                                                jQuery(".page-numbers").show();
-
-
-                                                        });  
-                                                        jQuery("body").delegate("#<?php echo $rand_Num_td; ?> .navigation_grid_rjg ul.page-numbers li a.page-numbers", "click", function(e) {
-
-                                                                jQuery("#<?php echo $rand_var_name; ?>_overlay_grid").css("width", jQuery("#<?php echo $rand_var_name; ?>").width());
-                                                                jQuery("#<?php echo $rand_var_name; ?>_overlay_grid").css("height", jQuery("#<?php echo $rand_var_name; ?>").height());
-
-                                                                e.preventDefault();
-                                                                var data = {
-                                                                        'action': 'rjg_get_grid_data_justified_gallery',
-                                                                        'page_url': encodeURI(jQuery(this).attr('href')),
-                                                                        'grid_id':0,
-                                                                        'total_rec':'<?php echo $total; ?>',
-                                                                        'vNonce':'<?php echo $vNonce;?>'
-                                                                };
-                                                                jQuery.post('<?php echo admin_url('admin-ajax.php'); ?>', data, function(response) {
-
-
-                                                                jQuery('html, body').animate({
-                                                                    scrollTop: jQuery("#<?php echo $rand_Num_td; ?>").offset().top
-                                                                }, 800);
-                                                                jQuery("#<?php echo $rand_Num_td; ?>").replaceWith(response);
-                                                                jQuery("#<?php echo $rand_var_name; ?>_overlay_grid").css("width", "0px");
-                                                                jQuery("#<?php echo $rand_var_name; ?>_overlay_grid").css("height", "0px");
-
-
-                                                              });
-
-
-
-                                                        });
-
-
-
-                                                      </script>
-                                                                  
-                                                                  
-                            <?php } ?>
+                            <?php echo rjg_print_masonry_gallery_plus_lightbox_func(array()); ?>
                         </div>
 			</div>
 	        <div class="clear"></div>
@@ -6720,6 +6433,8 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
 			$shortcode = '[print_masonry_gallery_plus_lightbox ]';
 		    ?>
                     <input type="text" value="&lt;?php echo do_shortcode('<?php echo htmlentities($shortcode, ENT_QUOTES); ?>'); ?&gt;" style="width: 400px; height: 30px" onclick="this.focus(); this.select()" />
+                    <h3><?php echo __('Or use the block','wp-responsive-photo-gallery');?></h3>
+                    <p><?php echo __('In the block editor, add the "Masonry Tiled Gallery" block from the block inserter — no shortcode needed.','wp-responsive-photo-gallery');?></p>
                 <?php } ?>
                 <div class="clear"></div>
  <?php
@@ -6735,6 +6450,7 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
 
                $altered = str_replace("<p>","",$matches[1]);
                $altered = str_replace("</p>","",$altered);
+               $altered = str_replace(array("<br />","<br/>","<br>"),"",$altered);
               
                 $altered=str_replace("&#038;","&",$altered);
                 $altered=str_replace("&#8221;",'"',$altered);

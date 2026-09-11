@@ -1,0 +1,33 @@
+.i13-rpg-block-preview {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 16px 18px;
+	border: 1px solid #e0e0e0;
+	border-radius: 8px;
+	background: #f6f7f7;
+}
+
+.i13-rpg-block-preview__icon.dashicons {
+	font-size: 32px;
+	width: 32px;
+	height: 32px;
+	color: #2271b1;
+	flex: 0 0 auto;
+}
+
+.i13-rpg-block-preview__body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.i13-rpg-block-preview__body strong {
+	font-size: 14px;
+	color: #1e1e1e;
+}
+
+.i13-rpg-block-preview__meta {
+	font-size: 12px;
+	color: #646970;
+}

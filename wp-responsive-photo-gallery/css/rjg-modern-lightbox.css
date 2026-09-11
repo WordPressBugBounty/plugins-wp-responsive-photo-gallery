@@ -1,0 +1,108 @@
+/* Modern Lightbox (dependency-free) - used by the Modern Masonry engine */
+.rjg-lb-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 100000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    box-sizing: border-box;
+}
+.rjg-lb-overlay.is-open { display: flex; }
+.rjg-lb-overlay *, .rjg-lb-overlay *::before, .rjg-lb-overlay *::after { box-sizing: border-box; }
+
+.rjg-lb-stage {
+    position: relative;
+    max-width: 92vw;
+    max-height: 86vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.rjg-lb-media {
+    max-width: 92vw;
+    max-height: 86vh;
+    display: block;
+    background: #000;
+}
+img.rjg-lb-media {
+    width: auto;
+    height: auto;
+    max-width: 92vw;
+    max-height: 86vh;
+    object-fit: contain;
+}
+iframe.rjg-lb-media {
+    width: min(92vw, 960px);
+    height: min(86vh, 540px);
+    border: 0;
+}
+
+.rjg-lb-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -34px;
+    text-align: center;
+    color: #eee;
+    font-size: 14px;
+    padding: 6px 10px;
+}
+
+.rjg-lb-close,
+.rjg-lb-prev,
+.rjg-lb-next {
+    position: fixed;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    z-index: 100001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+.rjg-lb-close:hover,
+.rjg-lb-prev:hover,
+.rjg-lb-next:hover { background: rgba(255,255,255,0.2); }
+
+.rjg-lb-close {
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 22px;
+    line-height: 1;
+}
+.rjg-lb-prev,
+.rjg-lb-next {
+    top: 50%;
+    transform: translateY(-50%);
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    font-size: 22px;
+}
+.rjg-lb-prev { left: 16px; }
+.rjg-lb-next { right: 16px; }
+
+.rjg-lb-loading {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255,255,255,0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: rjg-lb-spin 0.8s linear infinite;
+}
+@keyframes rjg-lb-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+    .rjg-lb-prev, .rjg-lb-next { width: 38px; height: 38px; font-size: 18px; }
+    .rjg-lb-close { width: 34px; height: 34px; font-size: 18px; }
+}
