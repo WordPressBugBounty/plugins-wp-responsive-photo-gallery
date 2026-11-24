@@ -5,18 +5,57 @@
     Author URI:https://www.i13websolution.com/product/photo-gallery-slideshow-masonry-tiled-gallery/
     Description: This is beautiful masonry tiled gallery and photo gallery slideshow plugin for wordPress blogs and sites.Admin can manages any number of images for photo slideshow and unlimited media into the masonry gallery.
     Author:I Thirteen Web Solution
-    Version:1.0.43
+    Version:1.0.44
     Text Domain:wp-responsive-photo-gallery
     Domain Path: /languages
     */
     //error_reporting(0);
 
-     if ( ! defined( 'ABSPATH' ) ) exit; 
+     if ( ! defined( 'ABSPATH' ) ) exit;
 
      if (!defined('WPRPG_PL_VERSION')) {
-         define('WPRPG_PL_VERSION', '1.0.43');
+         define('WPRPG_PL_VERSION', '1.0.44');
      }
-    
+
+    /**
+     * Security fix (Patchstack report, Nov 2026 — unauthenticated stored XSS via
+     * forged HTML-comment markers in WP core comment-block output leading to
+     * admin-account takeover):
+     *
+     * wrpg_remove_extra_p_tags() / rjg_remove_extra_p_tags() locate the plugin's
+     * own gallery markup inside already-rendered page content by searching for a
+     * pair of literal HTML comments, then decode &#8221;/&#038; entities found
+     * between them. Because the marker text was a fixed string, anyone who can
+     * get *any* text onto the page (an unauthenticated blog comment, on a block
+     * theme, is enough — WordPress keeps HTML comments in comment text, and
+     * every comment-template block passes through the render_block filter the
+     * same as a gallery block, with its output bubbling up and getting
+     * concatenated into an ancestor block's $content before render_block fires
+     * for that ancestor) could plant matching markers around unrelated,
+     * already-escaped markup (e.g. a comment author link) and have the plugin
+     * "unescape" it, breaking out of an HTML attribute to inject a zero-click
+     * script that creates a rogue administrator when the real site admin views
+     * the page. Full technical writeup: Patchstack report on this plugin,
+     * reported by researcher "Santh", Nov 2026.
+     *
+     * Fix: the markers now carry a random token that is generated fresh for
+     * every single page load and never sent to the browser before that same
+     * load finishes, so a marker planted in an earlier request (a stored
+     * comment, a saved post) can never match the token the current page load
+     * is looking for — the forged-marker attack is no longer possible. Note:
+     * on a site that serves a fully static page cache, the cached token stays
+     * fixed until the cache rebuilds, which narrows but does not by itself
+     * reopen the original multi-request attack window (the attacker would
+     * still need to control content injected into that same cached response).
+     */
+    function wrpg_marker_token() {
+        static $token = null;
+        if ($token === null) {
+            $token = wp_generate_password(12, false, false);
+        }
+        return $token;
+    }
+
     $dir = plugin_dir_path( __FILE__ );
     $dir=str_replace("\\","/",$dir);
     if(!class_exists('resize')){
@@ -2302,7 +2341,7 @@
         wp_enqueue_script('jquery.gview-3.0-dev-responsive');
         
         ob_start();
-    ?><!-- print_my_responsive_photo_gallery_func --><div id="divSliderMain_admin_<?php echo $rand_Numb;?>" style="max-width:<?php echo $settings['panel_width'];?>px;">
+    ?><!-- print_my_responsive_photo_gallery_func:<?php echo wrpg_marker_token(); ?> --><div id="divSliderMain_admin_<?php echo $rand_Numb;?>" style="max-width:<?php echo $settings['panel_width'];?>px;">
         <ul id="<?php echo $rand_Numb;?>" style="visibility: hidden">
             <?php
                 global $wpdb;
@@ -2482,7 +2521,7 @@
         }, 100);
 
 
-    </script><!-- end print_my_responsive_photo_gallery_func --><?php
+    </script><!-- end print_my_responsive_photo_gallery_func:<?php echo wrpg_marker_token(); ?> --><?php
         $output = ob_get_clean();
         return $output;
     }
@@ -2587,7 +2626,7 @@
         $autoplay = (isset($settings['autoplay']) and $settings['autoplay']==1) ? '1' : '0';
 
         ob_start();
-    ?><!-- print_my_responsive_photo_gallery_func --><div class="rjg-mslider" id="<?php echo esc_attr($rand_Numb); ?>" data-speed="<?php echo (int)$settings['transition_speed']; ?>" data-interval="<?php echo (int)$settings['transition_interval']; ?>" data-autoplay="<?php echo $autoplay; ?>" data-total="<?php echo count($images); ?>" style="max-width:<?php echo (int)$settings['panel_width'];?>px;--rjg-frame-opacity:<?php echo esc_attr($frame_opacity); ?>;--rjg-frame-gap:<?php echo (int)$frame_gap; ?>px;">
+    ?><!-- print_my_responsive_photo_gallery_func:<?php echo wrpg_marker_token(); ?> --><div class="rjg-mslider" id="<?php echo esc_attr($rand_Numb); ?>" data-speed="<?php echo (int)$settings['transition_speed']; ?>" data-interval="<?php echo (int)$settings['transition_interval']; ?>" data-autoplay="<?php echo $autoplay; ?>" data-total="<?php echo count($images); ?>" style="max-width:<?php echo (int)$settings['panel_width'];?>px;--rjg-frame-opacity:<?php echo esc_attr($frame_opacity); ?>;--rjg-frame-gap:<?php echo (int)$frame_gap; ?>px;">
         <div class="rjg-mslider-stage" style="height:<?php echo (int)$settings['panel_height'];?>px;" tabindex="0">
             <?php foreach($images as $i => $image): ?>
                 <div class="rjg-mslider-slide <?php echo esc_attr($scale_class); ?><?php echo ($i===0)?' is-active':''; ?>">
@@ -2620,7 +2659,7 @@
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-    </div><!-- end print_my_responsive_photo_gallery_func --><?php
+    </div><!-- end print_my_responsive_photo_gallery_func:<?php echo wrpg_marker_token(); ?> --><?php
         $output = ob_get_clean();
         return $output;
     }
@@ -5867,7 +5906,8 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
         if(strpos($content, 'print_my_responsive_photo_gallery_func')!==false){
         
             
-            $pattern = "/<!-- print_my_responsive_photo_gallery_func -->(.*)<!-- end print_my_responsive_photo_gallery_func -->/Uis"; 
+            $token = preg_quote(wrpg_marker_token(), '/');
+            $pattern = "/<!-- print_my_responsive_photo_gallery_func:" . $token . " -->(.*)<!-- end print_my_responsive_photo_gallery_func:" . $token . " -->/Uis";
             $content = preg_replace_callback($pattern, function($matches) {
 
 
@@ -5886,8 +5926,9 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
             
         }
         
-        $content = str_replace("<p><!-- print_my_responsive_photo_gallery_func -->","<!-- print_my_responsive_photo_gallery_func -->",$content);
-        $content = str_replace("<!-- end print_my_responsive_photo_gallery_func --></p>","<!-- end print_my_responsive_photo_gallery_func -->",$content);
+        $wrpg_marker = wrpg_marker_token();
+        $content = str_replace("<p><!-- print_my_responsive_photo_gallery_func:" . $wrpg_marker . " -->","<!-- print_my_responsive_photo_gallery_func:" . $wrpg_marker . " -->",$content);
+        $content = str_replace("<!-- end print_my_responsive_photo_gallery_func:" . $wrpg_marker . " --></p>","<!-- end print_my_responsive_photo_gallery_func:" . $wrpg_marker . " -->",$content);
         
         
         return $content;
@@ -5954,7 +5995,7 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
         
         ob_start();
         ?>
-         <!-- rjg_print_masonry_gallery_plus_lightbox_func --><?php if (is_array($settings)) { ?>
+         <!-- rjg_print_masonry_gallery_plus_lightbox_func:<?php echo wrpg_marker_token(); ?> --><?php if (is_array($settings)) { ?>
                                  
                     <style>#<?php echo $rand_var_name;?>{background-color:<?php echo $LoadingBackColor;?>;padding-top:<?php echo $imageMargin;?>px;padding-left:<?php echo $imageMargin;?>px;padding-right:<?php echo $imageMargin;?>px;}</style>
                     <div style="clear: both;"></div>
@@ -6244,7 +6285,7 @@ function rjg_responsive_justified_gallery_plus_lightbox_is_plugin_page() {
         <?php } ?>
 
         <div class="clear"></div>
-	<!-- end rjg_print_masonry_gallery_plus_lightbox_func -->          
+	<!-- end rjg_print_masonry_gallery_plus_lightbox_func:<?php echo wrpg_marker_token(); ?> -->          
  <?php
     	$output = ob_get_clean ();
 	return $output;
@@ -6286,7 +6327,7 @@ function rjg_print_masonry_gallery_plus_lightbox_func_modern($atts) {
     }
 
     ob_start();
-    ?><!-- rjg_print_masonry_gallery_plus_lightbox_func --><div class="rjg-mgrid-app" id="<?php echo esc_attr($app_id); ?>">
+    ?><!-- rjg_print_masonry_gallery_plus_lightbox_func:<?php echo wrpg_marker_token(); ?> --><div class="rjg-mgrid-app" id="<?php echo esc_attr($app_id); ?>">
         <div class="rjg-mgrid" style="--rjg-col-width:<?php echo (int)$col_width; ?>px;--rjg-gap:<?php echo (int)$gap; ?>px;background-color:<?php echo esc_attr($bg_color); ?>;">
             <?php if(count($rows) > 0): foreach($rows as $row):
                 $imagename = $row['image_name'];
@@ -6356,7 +6397,7 @@ function rjg_print_masonry_gallery_plus_lightbox_func_modern($atts) {
                 echo '<div class="rjg-mgrid-pagination">' . $page_links . '</div>';
             }
         ?>
-    </div><!-- end rjg_print_masonry_gallery_plus_lightbox_func --><?php
+    </div><!-- end rjg_print_masonry_gallery_plus_lightbox_func:<?php echo wrpg_marker_token(); ?> --><?php
     $output = ob_get_clean();
     return $output;
 }
@@ -6444,7 +6485,8 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
         if(strpos($content, 'rjg_print_masonry_gallery_plus_lightbox_func')!==false){
         
             
-            $pattern = "/<!-- rjg_print_masonry_gallery_plus_lightbox_func -->(.*)<!-- end rjg_print_masonry_gallery_plus_lightbox_func -->/Uis"; 
+            $token = preg_quote(wrpg_marker_token(), '/');
+            $pattern = "/<!-- rjg_print_masonry_gallery_plus_lightbox_func:" . $token . " -->(.*)<!-- end rjg_print_masonry_gallery_plus_lightbox_func:" . $token . " -->/Uis";
             $content = preg_replace_callback($pattern, function($matches) {
 
 
@@ -6463,8 +6505,9 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
             
         }
         
-        $content = str_replace("<p><!-- rjg_print_masonry_gallery_plus_lightbox_func -->","<!-- rjg_print_masonry_gallery_plus_lightbox_func -->",$content);
-        $content = str_replace("<!-- end rjg_print_masonry_gallery_plus_lightbox_func --></p>","<!-- end rjg_print_masonry_gallery_plus_lightbox_func -->",$content);
+        $rjg_marker = wrpg_marker_token();
+        $content = str_replace("<p><!-- rjg_print_masonry_gallery_plus_lightbox_func:" . $rjg_marker . " -->","<!-- rjg_print_masonry_gallery_plus_lightbox_func:" . $rjg_marker . " -->",$content);
+        $content = str_replace("<!-- end rjg_print_masonry_gallery_plus_lightbox_func:" . $rjg_marker . " --></p>","<!-- end rjg_print_masonry_gallery_plus_lightbox_func:" . $rjg_marker . " -->",$content);
         
         
         return $content;
@@ -6636,11 +6679,20 @@ function rfp_responsive_justified_gallery_with_lightbox_media_preview_func() {
   
 
   
-function i13_rpg_render_block_defaults($block_content, $block) { 
+function i13_rpg_render_block_defaults($block_content, $block) {
+
+    // Defense-in-depth alongside the per-request marker token above: never touch
+    // output from WordPress core's comment-rendering blocks. The plugin never
+    // prints its own gallery markup inside a comment template, and this is
+    // exactly the block family the reported attack used to smuggle a forged
+    // marker (planted via an ordinary blog comment) past this filter.
+    if ( ! empty( $block['blockName'] ) && strpos( $block['blockName'], 'core/comment' ) === 0 ) {
+        return $block_content;
+    }
 
     $block_content=wrpg_remove_extra_p_tags($block_content);
     $block_content=rjg_remove_extra_p_tags($block_content);
-    return $block_content; 
+    return $block_content;
 
 }
 

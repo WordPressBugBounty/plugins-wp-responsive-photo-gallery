@@ -3,8 +3,8 @@ Contributors:nik00726
 Tags: gallery, masonry, slideshow, video gallery, lightbox
 Requires at least:3.5
 Tested up to:7.1
-Version:1.0.43
-Stable tag:1.0.43
+Version:1.0.44
+Stable tag:1.0.44
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,10 @@ This plugin is free for everyone! Since it's released under the GPL, you can use
 
 
 == Changelog ==
+
+= 1.0.44 =
+
+* Security fix: closed an unauthenticated stored XSS reported via Patchstack. The plugin marks its own gallery output with HTML comment markers and later rewrites a couple of HTML entities found between them; because the marker text was fixed, content from elsewhere on the page (for example an ordinary, unauthenticated blog comment on a block theme) could contain matching markers and have the rewrite applied to it instead, which could be used to break out of an unrelated HTML attribute and run a script with no click required. The markers now include a random value generated fresh on every page load, so content from an earlier, unrelated request can never match, and the gallery's own rewrite logic additionally ignores WordPress's core comment-rendering blocks as a second layer of protection. If you run this plugin, update as soon as this version is available.
 
 = 1.0.43 =
 
